@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Procexp.Model;
 using Procexp.Sampling;
+using Procexp.SystemStats;
 
 // Headless smoke-checker for the data layer, mirroring Sources/ProcexpSmoke in
 // the macOS project. It exercises the providers without a GUI so the sampling
@@ -187,6 +188,68 @@ Check("services name their unit", services.Any(p => p.SystemdUnit is not null),
 var kernelThreads = snapshot.Processes.Values.Where(p => p.Flags.HasFlag(ProcessFlags.KernelThread)).ToList();
 Check("kernel threads detected", kernelThreads.Count > 0, $"{kernelThreads.Count} kernel threads");
 Check("kernel threads have no image", kernelThreads.All(p => p.ExecutablePath is null));
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nSystem statistics");
+// ---------------------------------------------------------------------------
+
+var statsProvider = new SystemStatsProvider();
+statsProvider.Read();                       // first read primes the deltas
+await Task.Delay(500);
+var stats = await statsProvider.StatsAsync();
+
+Check("memory total is plausible", stats.MemoryTotal > 1024UL * 1024 * 256,
+    ValueFormat.Bytes(stats.MemoryTotal));
+Check("memory used is below total", stats.MemoryUsed > 0 && stats.MemoryUsed < stats.MemoryTotal,
+    $"{ValueFormat.Bytes(stats.MemoryUsed)} used");
+Check("per-core CPU matches core count", stats.PerCoreCpuPercent.Count == Environment.ProcessorCount,
+    $"{stats.PerCoreCpuPercent.Count} cores reported, {Environment.ProcessorCount} expected");
+Check("CPU percentages are in range",
+    stats.CpuTotalPercent is >= 0 and <= 100 && stats.PerCoreCpuPercent.All(c => c is >= 0 and <= 100),
+    $"total {stats.CpuTotalPercent:F1}%");
+Check("open file count is plausible", stats.HandleCount > 0, $"{stats.HandleCount} descriptors");
+
+// MemTotal is the one figure we can check exactly against another tool.
+var memTotalKb = File.ReadLines("/proc/meminfo").FirstOrDefault(l => l.StartsWith("MemTotal:", StringComparison.Ordinal));
+if (memTotalKb is not null)
+{
+    var expectedBytes = ulong.Parse(memTotalKb.Split(':')[1].Trim().Split(' ')[0], CultureInfo.InvariantCulture) * 1024;
+    Check("memory total matches /proc/meminfo exactly", stats.MemoryTotal == expectedBytes);
+}
+
+Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+    $"    CPU {stats.CpuTotalPercent,5:F1}%   RAM {ValueFormat.Bytes(stats.MemoryUsed)}/{ValueFormat.Bytes(stats.MemoryTotal)}   " +
+    $"swap {ValueFormat.Bytes(stats.SwapUsed)}/{ValueFormat.Bytes(stats.SwapTotal)}"));
+Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+    $"    disk {ValueFormat.Bytes(stats.DiskBytesPerSec)}/s   net {ValueFormat.Bytes(stats.NetworkBytesPerSec)}/s   " +
+    $"cached {ValueFormat.Bytes(stats.MemoryCached)}   kernel {ValueFormat.Bytes(stats.MemoryKernel)}"));
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nHardware");
+// ---------------------------------------------------------------------------
+
+var hardware = HardwareInfo.Gather();
+Check("CPU model identified", hardware.CpuModel.Length > 0 && hardware.CpuModel != "Unknown CPU", hardware.CpuModel);
+Check("logical cores match runtime", hardware.LogicalCores == Environment.ProcessorCount,
+    $"{hardware.PhysicalCores} physical / {hardware.LogicalCores} logical");
+Check("physical cores do not exceed logical", hardware.PhysicalCores <= hardware.LogicalCores);
+Check("cache sizes read", hardware.L1DataCache is > 0 && hardware.L3Cache is > 0,
+    $"L1d {ValueFormat.Bytes(hardware.L1DataCache)}, L2 {ValueFormat.Bytes(hardware.L2Cache)}, L3 {ValueFormat.Bytes(hardware.L3Cache)}");
+Check("kernel version read", hardware.KernelVersion is { Length: > 0 }, hardware.KernelVersion);
+Check("distribution identified", hardware.DistributionName is { Length: > 0 }, hardware.DistributionName);
+Check("boot volume present", hardware.Volumes.Any(v => v.IsBootVolume),
+    $"{hardware.Volumes.Count} real volumes");
+Check("no pseudo filesystems listed", hardware.Volumes.All(v => v.FileSystem is not ("tmpfs" or "proc" or "sysfs" or "cgroup2")));
+Check("network interfaces enumerated", hardware.NetworkInterfaces.Count > 0,
+    string.Join(", ", hardware.NetworkInterfaces.Where(n => !n.IsLoopback).Select(n => n.Name)));
+Check("GPU enumerated", hardware.Gpus.Count > 0,
+    string.Join(", ", hardware.Gpus.Select(g => g.Name)));
+
+var nproc = RunCommand("nproc", "")?.Trim();
+if (int.TryParse(nproc, out var expectedCores))
+{
+    Check("core count matches nproc", hardware.LogicalCores == expectedCores, $"nproc says {expectedCores}");
+}
 
 // ---------------------------------------------------------------------------
 Console.WriteLine("\nSweep cost");

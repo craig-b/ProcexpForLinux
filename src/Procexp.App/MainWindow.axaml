@@ -19,6 +19,8 @@
         <MenuItem Name="MenuHighlight" Header="_Highlight New and Deleted"
                   ToggleType="CheckBox" IsChecked="True" />
         <Separator />
+        <MenuItem Name="MenuColumns" Header="Select _Columns..." />
+        <Separator />
         <MenuItem Name="MenuInstallHelper" Header="_Privileged Helper Status..." />
       </MenuItem>
 
@@ -64,6 +66,10 @@
           <MenuItem Name="MenuNiceLow" Header="Below Normal (nice 5)" />
           <MenuItem Name="MenuNiceLowest" Header="Lowest (nice 19)" />
         </MenuItem>
+      </MenuItem>
+
+      <MenuItem Header="_Find">
+        <MenuItem Name="MenuFind" Header="Find _Handle or Mapped File..." InputGesture="Ctrl+F" />
       </MenuItem>
 
       <MenuItem Header="_Help">

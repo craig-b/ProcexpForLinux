@@ -10,6 +10,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Procexp.App.Controls;
 using Procexp.App.Dialogs;
+using Procexp.App.Settings;
 using Procexp.Gpu;
 using Procexp.Metrics;
 using Procexp.Model;
@@ -50,6 +51,9 @@ public partial class MainWindow : Window
     private bool _paused;
     private double _intervalSeconds = 1.0;
 
+    private AppSettings _settings = SettingsStore.Load();
+    private CancellationTokenSource? _saveDebounce;
+
     private readonly Queue<double> _sweepTimes = new();
     private readonly Queue<double> _layoutTimes = new();
 
@@ -68,22 +72,14 @@ public partial class MainWindow : Window
 
         Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
 
-        _columns =
-        [
-            (Column.Name, _tree.NamePaneWidth),
-            .. new[]
-            {
-                Column.Pid, Column.Cpu, Column.PrivateBytes, Column.WorkingSet,
-                Column.VirtualSize, Column.Threads, Column.Handles, Column.State,
-                Column.User, Column.Nice, Column.MinorFaults, Column.MajorFaults,
-                Column.StartTime, Column.SystemdUnit, Column.Description, Column.Path,
-            }.Select(c => (c, Columns.DefaultWidth(c))),
-        ];
+        ApplyColumns(_settings.Columns);
 
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
         _lowerPane = new LowerPaneView(_detail) { IsDarkMode = _tree.IsDarkMode };
         Get<ContentControl>("LowerPaneHost").Content = _lowerPane;
+
+        ApplySettings();
 
         WireTree();
         WireLowerPane();
@@ -91,16 +87,124 @@ public partial class MainWindow : Window
         WireMenus();
         WireContextMenu();
 
+        // Window geometry changes constantly while dragging, so it rides the same
+        // debounce as everything else.
+        SizeChanged += (_, _) => ScheduleSave();
+
         Opened += (_, _) =>
         {
+            SetLowerPaneVisible(_settings.ShowLowerPane);
+            _lowerPane.Mode = _settings.LowerPaneMode;
+            Get<ComboBox>("PaneModeCombo").SelectedIndex = (int)_settings.LowerPaneMode;
+
             _ = RunSamplingLoopAsync();
             _ = RunHighlightTickerAsync();
         };
 
-        Closed += (_, _) => _lifetime.Cancel();
+        Closed += (_, _) =>
+        {
+            _lifetime.Cancel();
+            SaveSettings();
+        };
     }
 
     private T Get<T>(string name) where T : Control => this.FindControl<T>(name)!;
+
+    /// <summary>
+    /// Rebuild the column layout, honouring any saved widths.
+    /// </summary>
+    /// <remarks>
+    /// Widths are keyed by column name rather than position, so adding or
+    /// reordering columns does not shuffle every stored width onto the wrong one.
+    /// </remarks>
+    private void ApplyColumns(IReadOnlyList<Column> columns)
+    {
+        var normalised = Columns_.Normalise(columns);
+
+        _columns =
+        [
+            (Column.Name, _tree.NamePaneWidth),
+            .. normalised
+                .Where(c => c != Column.Name)
+                .Select(c => (c, _settings.ColumnWidths.TryGetValue(c.ToString(), out var w)
+                    ? w
+                    : Columns.DefaultWidth(c))),
+        ];
+    }
+
+    private void ApplySettings()
+    {
+        _tree.SortColumn = _settings.SortColumn;
+        _tree.SortDescending = _settings.SortDescending;
+        _tree.NamePaneWidth = _settings.NamePaneWidth;
+        _list.HighlightNewAndDead = _settings.HighlightNewAndDead;
+        _intervalSeconds = _settings.RefreshSeconds;
+
+        Width = _settings.WindowWidth;
+        Height = _settings.WindowHeight;
+        Topmost = _settings.AlwaysOnTop;
+
+        Get<ToggleSwitch>("TreeToggle").IsChecked = _settings.TreeMode;
+        Get<MenuItem>("MenuTreeMode").IsChecked = _settings.TreeMode;
+        Get<MenuItem>("MenuHighlight").IsChecked = _settings.HighlightNewAndDead;
+        Get<MenuItem>("MenuAlwaysOnTop").IsChecked = _settings.AlwaysOnTop;
+        Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
+
+        // The speed radio group has to agree with the interval that was restored,
+        // or the menu claims one rate while the loop runs at another.
+        Get<MenuItem>("MenuSpeedFast").IsChecked = _settings.RefreshSeconds <= 0.5;
+        Get<MenuItem>("MenuSpeedNormal").IsChecked = Math.Abs(_settings.RefreshSeconds - 1.0) < 0.01;
+        Get<MenuItem>("MenuSpeedSlow").IsChecked = Math.Abs(_settings.RefreshSeconds - 2.0) < 0.01;
+        Get<MenuItem>("MenuSpeedVerySlow").IsChecked = _settings.RefreshSeconds >= 5.0;
+    }
+
+    /// <summary>
+    /// Queue a settings save, coalescing bursts.
+    /// </summary>
+    /// <remarks>
+    /// Saving only on window close loses everything if the app is killed or
+    /// crashes — and a process explorer is a tool people SIGTERM. Debounced so
+    /// that dragging a splitter does not write the file on every frame.
+    /// </remarks>
+    private void ScheduleSave()
+    {
+        _saveDebounce?.Cancel();
+        _saveDebounce = new CancellationTokenSource();
+        var token = _saveDebounce.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), token).ConfigureAwait(false);
+                await Dispatcher.UIThread.InvokeAsync(SaveSettings);
+            }
+            catch (OperationCanceledException)
+            {
+                // Superseded by a later change.
+            }
+        }, CancellationToken.None);
+    }
+
+    private void SaveSettings()
+    {
+        SettingsStore.Save(_settings with
+        {
+            Columns = [.. _columns.Select(c => c.Column)],
+            ColumnWidths = _columns.ToDictionary(c => c.Column.ToString(), c => c.Width),
+            SortColumn = _tree.SortColumn,
+            SortDescending = _tree.SortDescending,
+            TreeMode = Get<ToggleSwitch>("TreeToggle").IsChecked == true,
+            ShowLowerPane = Get<ContentControl>("LowerPaneHost").IsVisible,
+            LowerPaneMode = _lowerPane.Mode,
+            RefreshSeconds = _intervalSeconds,
+            HighlightNewAndDead = _list.HighlightNewAndDead,
+            AlwaysOnTop = Topmost,
+            NamePaneWidth = _tree.NamePaneWidth,
+            WindowWidth = Width,
+            WindowHeight = Height,
+        });
+    }
 
     // ---- Wiring -------------------------------------------------------------
 
@@ -117,6 +221,7 @@ public partial class MainWindow : Window
             Get<MenuItem>("MenuPaneModules").IsChecked = mode == LowerPaneMode.Modules;
             Get<MenuItem>("MenuPaneHandles").IsChecked = mode == LowerPaneMode.Handles;
             Get<MenuItem>("MenuPaneThreads").IsChecked = mode == LowerPaneMode.Threads;
+            ScheduleSave();
         };
 
         WirePaneMode("MenuPaneModules", LowerPaneMode.Modules);
@@ -151,6 +256,7 @@ public partial class MainWindow : Window
         Get<ContentControl>("LowerPaneHost").IsVisible = visible;
         Get<ToggleButton>("LowerPaneToggle").IsChecked = visible;
         Get<MenuItem>("MenuLowerPane").IsChecked = visible;
+        ScheduleSave();
 
         if (visible)
         {
@@ -199,6 +305,7 @@ public partial class MainWindow : Window
             }
 
             Rebuild();
+            ScheduleSave();
         };
 
         _verticalScroll.Scroll += (_, _) => _tree.VerticalOffset = _verticalScroll.Value;
@@ -217,6 +324,7 @@ public partial class MainWindow : Window
         {
             Get<MenuItem>("MenuTreeMode").IsChecked = treeToggle.IsChecked == true;
             Rebuild();
+            ScheduleSave();
         };
     }
 
@@ -226,10 +334,18 @@ public partial class MainWindow : Window
         Get<MenuItem>("MenuSave").Click += (_, _) => _ = SaveProcessListAsync();
 
         var alwaysOnTop = Get<MenuItem>("MenuAlwaysOnTop");
-        alwaysOnTop.Click += (_, _) => Topmost = alwaysOnTop.IsChecked;
+        alwaysOnTop.Click += (_, _) =>
+        {
+            Topmost = alwaysOnTop.IsChecked;
+            ScheduleSave();
+        };
 
         var highlight = Get<MenuItem>("MenuHighlight");
-        highlight.Click += (_, _) => _list.HighlightNewAndDead = highlight.IsChecked;
+        highlight.Click += (_, _) =>
+        {
+            _list.HighlightNewAndDead = highlight.IsChecked;
+            ScheduleSave();
+        };
 
         Get<MenuItem>("MenuInstallHelper").Click += (_, _) => _ = ShowHelperStatusAsync();
 
@@ -265,9 +381,15 @@ public partial class MainWindow : Window
         Get<MenuItem>("MenuAbout").Click += (_, _) => _ = ShowAboutAsync();
         Get<MenuItem>("MenuProperties").Click += (_, _) => ShowProperties();
         Get<MenuItem>("MenuSystemInfo").Click += (_, _) => ShowSystemInfo();
+        Get<MenuItem>("MenuColumns").Click += (_, _) => _ = ChooseColumnsAsync();
+        Get<MenuItem>("MenuFind").Click += (_, _) => ShowFind();
 
         void WireSpeed(string name, double seconds) =>
-            Get<MenuItem>(name).Click += (_, _) => _intervalSeconds = seconds;
+            Get<MenuItem>(name).Click += (_, _) =>
+            {
+                _intervalSeconds = seconds;
+                ScheduleSave();
+            };
 
         void WireNice(string name, int nice) =>
             Get<MenuItem>(name).Click += (_, _) => _ = SetNiceSelectedAsync(nice);
@@ -580,6 +702,28 @@ public partial class MainWindow : Window
         _systemInfo.SetProcessCounts(_list.Current.Processes.Count, _list.Current.System.ThreadCount);
         _systemInfo.Closed += (_, _) => _systemInfo = null;
         _systemInfo.Show(this);
+    }
+
+    private async Task ChooseColumnsAsync()
+    {
+        var chooser = new ColumnChooserWindow([.. _columns.Select(c => c.Column)]);
+        await chooser.ShowDialog(this).ConfigureAwait(true);
+
+        if (chooser.Result is { } chosen)
+        {
+            ApplyColumns(chosen);
+            Rebuild();
+
+            // Persist immediately. A column layout is deliberate work, and losing
+            // it to a crash before the next clean exit would be irritating.
+            SaveSettings();
+        }
+    }
+
+    private void ShowFind()
+    {
+        var find = new FindHandleWindow(_detail, () => _list.Current, _tree.IsDarkMode);
+        find.Show(this);
     }
 
     private async Task CopyAsync(string? text)

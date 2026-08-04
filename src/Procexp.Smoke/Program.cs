@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Procexp.Actions;
 using Procexp.Autostart;
+using Procexp.Gpu;
 using Procexp.Model;
 using Procexp.Sampling;
 using Procexp.Net;
@@ -387,6 +388,50 @@ if (int.TryParse(nproc, out var expectedCores))
 {
     Check("core count matches nproc", hardware.LogicalCores == expectedCores, $"nproc says {expectedCores}");
 }
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nGPU");
+// ---------------------------------------------------------------------------
+
+var gpu = new GpuProvider();
+Check("DRM subsystem present", gpu.IsAvailable);
+
+var totalGpu = await gpu.TotalGpuPercentAsync();
+Check("aggregate GPU busy read", totalGpu is not null,
+    totalGpu is null ? "driver publishes no gpu_busy_percent" : $"{totalGpu:F0}%");
+Check("aggregate GPU busy is in range", totalGpu is null or (>= 0 and <= 100));
+
+var videoMemory = gpu.VideoMemory();
+Check("video memory read", videoMemory is not null,
+    videoMemory is null ? null : $"{ValueFormat.Bytes(videoMemory.Value.Used)} / {ValueFormat.Bytes(videoMemory.Value.Total)}");
+
+// Per-process needs two samples to produce a rate, as CPU does.
+var gpuWatch = Stopwatch.StartNew();
+gpu.Sample();
+var firstGpuWalk = gpuWatch.Elapsed;
+await Task.Delay(700);
+var (gpuPercentages, gpuMemory) = gpu.Sample();
+
+Check("per-process GPU clients discovered", gpuMemory.Count > 0 || gpuPercentages.Count > 0,
+    $"{gpuMemory.Count} clients with resident memory, {gpuPercentages.Count} busy");
+
+// A client holding several descriptors reports identical totals on each, so a
+// missing dedupe shows up as impossible percentages rather than as a small error.
+var cappedAt = Environment.ProcessorCount * 100.0;
+Check("no process reports impossible GPU usage",
+    gpuPercentages.Values.All(v => v is > 0 and < 1000),
+    gpuPercentages.Count == 0 ? "nothing busy right now" : $"max {gpuPercentages.Values.Max():F1}%");
+_ = cappedAt;
+
+foreach (var (id, percent) in gpuPercentages.OrderByDescending(kv => kv.Value).Take(5))
+{
+    var name = snapshot.Processes.GetValueOrDefault(id)?.Name ?? $"pid {id.Pid}";
+    Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+        $"    {percent,7:F2}%  {Truncate(name, 24),-24}  {ValueFormat.Bytes(gpuMemory.GetValueOrDefault(id)),10}"));
+}
+
+Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+    $"    fdinfo walk cost: {firstGpuWalk.TotalMilliseconds:F1} ms"));
 
 // ---------------------------------------------------------------------------
 Console.WriteLine("\nAutostart");

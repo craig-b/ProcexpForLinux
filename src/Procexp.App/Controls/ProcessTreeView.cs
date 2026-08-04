@@ -57,7 +57,10 @@ public sealed class ProcessTreeView : VirtualTableBase
     /// index would silently move the selection to a different process — which
     /// matters a great deal when the next click is Kill.
     /// </remarks>
-    public void SetRows(IReadOnlyList<VisibleRow> rows, IReadOnlyList<(Column Column, double Width)> columns)
+    public void SetRows(
+        IReadOnlyList<VisibleRow> rows,
+        IReadOnlyList<(Column Column, double Width)> columns
+    )
     {
         var previouslySelected = SelectedProcess?.Id;
 
@@ -78,7 +81,6 @@ public sealed class ProcessTreeView : VirtualTableBase
 
             RestoreSelectedIndex(index);
         }
-
         else if (rows.Count > 0)
         {
             // Start with the first row selected. The lower pane and the Process
@@ -117,7 +119,11 @@ public sealed class ProcessTreeView : VirtualTableBase
 
         // The divider marks where the frozen pane ends, otherwise ambiguous once
         // the metrics are scrolled.
-        context.DrawLine(Palette.Divider, new Point(NamePaneWidth, 0), new Point(NamePaneWidth, Bounds.Height));
+        context.DrawLine(
+            Palette.Divider,
+            new Point(NamePaneWidth, 0),
+            new Point(NamePaneWidth, Bounds.Height)
+        );
     }
 
     private void RenderNameRows(DrawingContext context, int firstRow, int lastRow)
@@ -140,9 +146,15 @@ public sealed class ProcessTreeView : VirtualTableBase
             DrawCell(
                 context,
                 row.Process.Name,
-                new Rect(textLeft, y, Math.Max(0, NamePaneWidth - textLeft - CellPadding), RowHeight),
+                new Rect(
+                    textLeft,
+                    y,
+                    Math.Max(0, NamePaneWidth - textLeft - CellPadding),
+                    RowHeight
+                ),
                 rightAligned: false,
-                selected: i == SelectedIndex);
+                selected: i == SelectedIndex
+            );
         }
     }
 
@@ -153,7 +165,12 @@ public sealed class ProcessTreeView : VirtualTableBase
             var row = _rows[i];
             var y = RowTop(i);
 
-            DrawRowBackground(context, new Rect(0, y, ScrollableWidth, RowHeight), i, RuleBrush(row));
+            DrawRowBackground(
+                context,
+                new Rect(0, y, ScrollableWidth, RowHeight),
+                i,
+                RuleBrush(row)
+            );
 
             double x = 0;
             for (var c = 1; c < _columns.Count; c++)
@@ -162,7 +179,10 @@ public sealed class ProcessTreeView : VirtualTableBase
 
                 // Skip columns scrolled out of view. With twenty-odd configured
                 // that is most of them.
-                if (x + width >= HorizontalOffset && x <= HorizontalOffset + ScrollableViewportWidth)
+                if (
+                    x + width >= HorizontalOffset
+                    && x <= HorizontalOffset + ScrollableViewportWidth
+                )
                 {
                     var text = Columns.Format(column, row.Process);
                     if (text.Length > 0)
@@ -170,9 +190,15 @@ public sealed class ProcessTreeView : VirtualTableBase
                         DrawCell(
                             context,
                             text,
-                            new Rect(x + CellPadding, y, Math.Max(0, width - (CellPadding * 2)), RowHeight),
+                            new Rect(
+                                x + CellPadding,
+                                y,
+                                Math.Max(0, width - (CellPadding * 2)),
+                                RowHeight
+                            ),
                             Columns.IsRightAligned(column),
-                            i == SelectedIndex);
+                            i == SelectedIndex
+                        );
                     }
                 }
 
@@ -189,20 +215,35 @@ public sealed class ProcessTreeView : VirtualTableBase
 
     private void RenderNameHeader(DrawingContext context)
     {
-        context.FillRectangle(Palette.HeaderBackground, new Rect(0, 0, NamePaneWidth, HeaderHeight));
-        context.DrawLine(Palette.Divider, new Point(0, HeaderHeight), new Point(NamePaneWidth, HeaderHeight));
+        context.FillRectangle(
+            Palette.HeaderBackground,
+            new Rect(0, 0, NamePaneWidth, HeaderHeight)
+        );
+        context.DrawLine(
+            Palette.Divider,
+            new Point(0, HeaderHeight),
+            new Point(NamePaneWidth, HeaderHeight)
+        );
 
         DrawHeaderCell(
             context,
             Label(Column.Name),
             new Rect(CellPadding, 0, NamePaneWidth - (CellPadding * 2), HeaderHeight),
-            rightAligned: false);
+            rightAligned: false
+        );
     }
 
     private void RenderMetricHeaders(DrawingContext context)
     {
-        context.FillRectangle(Palette.HeaderBackground, new Rect(0, 0, ScrollableWidth, HeaderHeight));
-        context.DrawLine(Palette.Divider, new Point(0, HeaderHeight), new Point(ScrollableWidth, HeaderHeight));
+        context.FillRectangle(
+            Palette.HeaderBackground,
+            new Rect(0, 0, ScrollableWidth, HeaderHeight)
+        );
+        context.DrawLine(
+            Palette.Divider,
+            new Point(0, HeaderHeight),
+            new Point(ScrollableWidth, HeaderHeight)
+        );
 
         double x = 0;
         for (var c = 1; c < _columns.Count; c++)
@@ -214,10 +255,20 @@ public sealed class ProcessTreeView : VirtualTableBase
                 DrawHeaderCell(
                     context,
                     Label(column),
-                    new Rect(x + CellPadding, 0, Math.Max(0, width - (CellPadding * 2)), HeaderHeight),
-                    Columns.IsRightAligned(column));
+                    new Rect(
+                        x + CellPadding,
+                        0,
+                        Math.Max(0, width - (CellPadding * 2)),
+                        HeaderHeight
+                    ),
+                    Columns.IsRightAligned(column)
+                );
 
-                context.DrawLine(Palette.Divider, new Point(x + width, 0), new Point(x + width, HeaderHeight));
+                context.DrawLine(
+                    Palette.Divider,
+                    new Point(x + width, 0),
+                    new Point(x + width, HeaderHeight)
+                );
             }
 
             x += width;

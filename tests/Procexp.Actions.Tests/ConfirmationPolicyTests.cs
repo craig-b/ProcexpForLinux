@@ -31,7 +31,11 @@ public class ConfirmationPolicyTests
     }
 
     private static ProcessRecord Process(
-        int pid, string name, ProcessFlags flags = ProcessFlags.None, string? unit = null) =>
+        int pid,
+        string name,
+        ProcessFlags flags = ProcessFlags.None,
+        string? unit = null
+    ) =>
         new()
         {
             Id = new ProcessId(pid, 1000),
@@ -54,7 +58,8 @@ public class ConfirmationPolicyTests
     public void KillingOurselvesIsRefused()
     {
         var confirmation = ActionConfirmationPolicy.ForKill(
-            Process(Environment.ProcessId, "procexp"));
+            Process(Environment.ProcessId, "procexp")
+        );
 
         Assert.True(confirmation.IsRefused);
     }
@@ -82,7 +87,8 @@ public class ConfirmationPolicyTests
     public void ServicesWarnThatSystemdWillRestartThem()
     {
         var confirmation = ActionConfirmationPolicy.ForKill(
-            Process(900, "sshd", ProcessFlags.Service, "sshd.service"));
+            Process(900, "sshd", ProcessFlags.Service, "sshd.service")
+        );
 
         Assert.Equal(ConfirmationSeverity.Disruptive, confirmation.Severity);
         Assert.False(confirmation.IsRefused);
@@ -155,9 +161,14 @@ public class ConfirmationPolicyTests
     public void RestartingAServiceRecommendsSystemctl()
     {
         var confirmation = ActionConfirmationPolicy.ForRestart(
-            Process(900, "nginx", ProcessFlags.Service, "nginx.service"));
+            Process(900, "nginx", ProcessFlags.Service, "nginx.service")
+        );
 
-        Assert.Contains("systemctl restart nginx.service", confirmation.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "systemctl restart nginx.service",
+            confirmation.Message,
+            StringComparison.Ordinal
+        );
         Assert.Equal(ConfirmationSeverity.Disruptive, confirmation.Severity);
     }
 }
@@ -190,7 +201,9 @@ public class ProcessActionsTests
         // Above the default pid_max, so it cannot exist.
         var missing = new ProcessId(0x7FFF_FFFE, 12345);
 
-        var exception = Assert.Throws<ProviderException>(() => actions.Signal(missing, Signals.Cont));
+        var exception = Assert.Throws<ProviderException>(() =>
+            actions.Signal(missing, Signals.Cont)
+        );
         Assert.Equal(ProviderErrorKind.ProcessGone, exception.Kind);
     }
 
@@ -205,7 +218,9 @@ public class ProcessActionsTests
         var actions = new ProcessActions();
 
         // Signal 0 checks for existence without delivering anything.
-        var exception = Record.Exception(() => actions.Signal(new ProcessId(Environment.ProcessId, 0), 0));
+        var exception = Record.Exception(() =>
+            actions.Signal(new ProcessId(Environment.ProcessId, 0), 0)
+        );
         Assert.Null(exception);
     }
 }

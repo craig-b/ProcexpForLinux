@@ -27,10 +27,9 @@ public partial class MainWindow : Window
     /// for the ptrace-gated reads when one is installed, so the UI never has to
     /// know whether a given process needed it.
     /// </summary>
-    private readonly IProcessDataProvider _detail =
-        PrivilegedClient.IsAvailable
-            ? new HelperBackedProvider(new ProcSampler(), new PrivilegedClient())
-            : new ProcSampler();
+    private readonly IProcessDataProvider _detail = PrivilegedClient.IsAvailable
+        ? new HelperBackedProvider(new ProcSampler(), new PrivilegedClient())
+        : new ProcSampler();
     private readonly ProcessListModel _list = new();
     private readonly HashSet<ProcessId> _collapsed = [];
     private readonly CancellationTokenSource _lifetime = new();
@@ -100,8 +99,8 @@ public partial class MainWindow : Window
         // Enrichment arrives out of band, so the list has to be told. Marshalled
         // and coalesced: a first sweep queues several hundred image lookups, and
         // rebuilding per completion would be hundreds of rebuilds.
-        _enricher.Updated += (_, _) => Dispatcher.UIThread.Post(
-            () => _enrichmentDirty = true, DispatcherPriority.Background);
+        _enricher.Updated += (_, _) =>
+            Dispatcher.UIThread.Post(() => _enrichmentDirty = true, DispatcherPriority.Background);
 
         Opened += (_, _) =>
         {
@@ -121,7 +120,8 @@ public partial class MainWindow : Window
         };
     }
 
-    private T Get<T>(string name) where T : Control => this.FindControl<T>(name)!;
+    private T Get<T>(string name)
+        where T : Control => this.FindControl<T>(name)!;
 
     /// <summary>
     /// Rebuild the column layout, honouring any saved widths.
@@ -139,9 +139,14 @@ public partial class MainWindow : Window
             (Column.Name, _tree.NamePaneWidth),
             .. normalised
                 .Where(c => c != Column.Name)
-                .Select(c => (c, _settings.ColumnWidths.TryGetValue(c.ToString(), out var w)
-                    ? w
-                    : Columns.DefaultWidth(c))),
+                .Select(c =>
+                    (
+                        c,
+                        _settings.ColumnWidths.TryGetValue(c.ToString(), out var w)
+                            ? w
+                            : Columns.DefaultWidth(c)
+                    )
+                ),
         ];
     }
 
@@ -166,7 +171,8 @@ public partial class MainWindow : Window
         // The speed radio group has to agree with the interval that was restored,
         // or the menu claims one rate while the loop runs at another.
         Get<MenuItem>("MenuSpeedFast").IsChecked = _settings.RefreshSeconds <= 0.5;
-        Get<MenuItem>("MenuSpeedNormal").IsChecked = Math.Abs(_settings.RefreshSeconds - 1.0) < 0.01;
+        Get<MenuItem>("MenuSpeedNormal").IsChecked =
+            Math.Abs(_settings.RefreshSeconds - 1.0) < 0.01;
         Get<MenuItem>("MenuSpeedSlow").IsChecked = Math.Abs(_settings.RefreshSeconds - 2.0) < 0.01;
         Get<MenuItem>("MenuSpeedVerySlow").IsChecked = _settings.RefreshSeconds >= 5.0;
     }
@@ -185,38 +191,43 @@ public partial class MainWindow : Window
         _saveDebounce = new CancellationTokenSource();
         var token = _saveDebounce.Token;
 
-        _ = Task.Run(async () =>
-        {
-            try
+        _ = Task.Run(
+            async () =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(2), token).ConfigureAwait(false);
-                await Dispatcher.UIThread.InvokeAsync(SaveSettings);
-            }
-            catch (OperationCanceledException)
-            {
-                // Superseded by a later change.
-            }
-        }, CancellationToken.None);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), token).ConfigureAwait(false);
+                    await Dispatcher.UIThread.InvokeAsync(SaveSettings);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Superseded by a later change.
+                }
+            },
+            CancellationToken.None
+        );
     }
 
     private void SaveSettings()
     {
-        SettingsStore.Save(_settings with
-        {
-            Columns = [.. _columns.Select(c => c.Column)],
-            ColumnWidths = _columns.ToDictionary(c => c.Column.ToString(), c => c.Width),
-            SortColumn = _tree.SortColumn,
-            SortDescending = _tree.SortDescending,
-            TreeMode = Get<ToggleSwitch>("TreeToggle").IsChecked == true,
-            ShowLowerPane = Get<ContentControl>("LowerPaneHost").IsVisible,
-            LowerPaneMode = _lowerPane.Mode,
-            RefreshSeconds = _intervalSeconds,
-            HighlightNewAndDead = _list.HighlightNewAndDead,
-            AlwaysOnTop = Topmost,
-            NamePaneWidth = _tree.NamePaneWidth,
-            WindowWidth = Width,
-            WindowHeight = Height,
-        });
+        SettingsStore.Save(
+            _settings with
+            {
+                Columns = [.. _columns.Select(c => c.Column)],
+                ColumnWidths = _columns.ToDictionary(c => c.Column.ToString(), c => c.Width),
+                SortColumn = _tree.SortColumn,
+                SortDescending = _tree.SortDescending,
+                TreeMode = Get<ToggleSwitch>("TreeToggle").IsChecked == true,
+                ShowLowerPane = Get<ContentControl>("LowerPaneHost").IsVisible,
+                LowerPaneMode = _lowerPane.Mode,
+                RefreshSeconds = _intervalSeconds,
+                HighlightNewAndDead = _list.HighlightNewAndDead,
+                AlwaysOnTop = Topmost,
+                NamePaneWidth = _tree.NamePaneWidth,
+                WindowWidth = Width,
+                WindowHeight = Height,
+            }
+        );
     }
 
     // ---- Wiring -------------------------------------------------------------
@@ -263,7 +274,9 @@ public partial class MainWindow : Window
         var split = Get<Grid>("PaneSplit");
 
         split.RowDefinitions[1].Height = visible ? GridLength.Auto : new GridLength(0);
-        split.RowDefinitions[2].Height = visible ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+        split.RowDefinitions[2].Height = visible
+            ? new GridLength(2, GridUnitType.Star)
+            : new GridLength(0);
 
         Get<GridSplitter>("PaneSplitter").IsVisible = visible;
         Get<ContentControl>("LowerPaneHost").IsVisible = visible;
@@ -572,7 +585,8 @@ public partial class MainWindow : Window
             _collapsed,
             _tree.SortColumn,
             _tree.SortDescending,
-            treeMode: Get<ToggleSwitch>("TreeToggle").IsChecked == true);
+            treeMode: Get<ToggleSwitch>("TreeToggle").IsChecked == true
+        );
 
         _tree.SetRows(rows, _columns);
         Record(_layoutTimes, watch.Elapsed.TotalMilliseconds);
@@ -589,7 +603,10 @@ public partial class MainWindow : Window
         _verticalScroll.Value = _tree.VerticalOffset;
 
         _horizontalScroll.Minimum = 0;
-        _horizontalScroll.Maximum = Math.Max(0, _tree.MetricsExtentWidth - _tree.MetricsViewportWidth);
+        _horizontalScroll.Maximum = Math.Max(
+            0,
+            _tree.MetricsExtentWidth - _tree.MetricsViewportWidth
+        );
         _horizontalScroll.ViewportSize = _tree.MetricsViewportWidth;
         _horizontalScroll.Value = _tree.HorizontalOffset;
     }
@@ -603,15 +620,16 @@ public partial class MainWindow : Window
 
         _statusText.Text = selected is null
             ? $"{prefix}{snapshot.Processes.Count} processes, {snapshot.System.ThreadCount} threads"
-            : $"{prefix}{snapshot.Processes.Count} processes, {snapshot.System.ThreadCount} threads    —    " +
-              $"{selected.Name} (pid {selected.Id.Pid}), {selected.ThreadCount} threads, " +
-              $"{ValueFormat.Bytes(selected.ResidentSize)}";
+            : $"{prefix}{snapshot.Processes.Count} processes, {snapshot.System.ThreadCount} threads    —    "
+                + $"{selected.Name} (pid {selected.Id.Pid}), {selected.ThreadCount} threads, "
+                + $"{ValueFormat.Bytes(selected.ResidentSize)}";
 
         _timingText.Text = string.Create(
             CultureInfo.InvariantCulture,
-            $"sweep {Average(_sweepTimes),6:F1} ms   layout {Average(_layoutTimes),5:F2} ms   " +
-            $"paint {_tree.AverageRenderMilliseconds,5:F2} ms   " +
-            $"{_tree.LastRenderedRowCount}/{snapshot.Processes.Count} rows drawn");
+            $"sweep {Average(_sweepTimes), 6:F1} ms   layout {Average(_layoutTimes), 5:F2} ms   "
+                + $"paint {_tree.AverageRenderMilliseconds, 5:F2} ms   "
+                + $"{_tree.LastRenderedRowCount}/{snapshot.Processes.Count} rows drawn"
+        );
     }
 
     // ---- Actions ------------------------------------------------------------
@@ -714,7 +732,10 @@ public partial class MainWindow : Window
         }
 
         _systemInfo = new SystemInfoWindow(_systemStats, _gpu, _tree.IsDarkMode);
-        _systemInfo.SetProcessCounts(_list.Current.Processes.Count, _list.Current.System.ThreadCount);
+        _systemInfo.SetProcessCounts(
+            _list.Current.Processes.Count,
+            _list.Current.System.ThreadCount
+        );
         _systemInfo.Closed += (_, _) => _systemInfo = null;
         _systemInfo.Show(this);
     }
@@ -753,11 +774,11 @@ public partial class MainWindow : Window
 
     private async Task SaveProcessListAsync()
     {
-        var file = await StorageProvider.SaveFilePickerAsync(new()
-        {
-            Title = "Save Process List",
-            SuggestedFileName = "processes.txt",
-        }).ConfigureAwait(true);
+        var file = await StorageProvider
+            .SaveFilePickerAsync(
+                new() { Title = "Save Process List", SuggestedFileName = "processes.txt" }
+            )
+            .ConfigureAwait(true);
 
         if (file is null)
         {
@@ -767,26 +788,41 @@ public partial class MainWindow : Window
         try
         {
             var rows = RowFlattener.Flatten(
-                _list.AsSnapshot(), _collapsed, _tree.SortColumn, _tree.SortDescending, treeMode: true);
+                _list.AsSnapshot(),
+                _collapsed,
+                _tree.SortColumn,
+                _tree.SortDescending,
+                treeMode: true
+            );
 
             await using var stream = await file.OpenWriteAsync().ConfigureAwait(true);
             await using var writer = new StreamWriter(stream);
 
-            await writer.WriteLineAsync(string.Join('\t', _columns.Select(c => Columns.Title(c.Column))))
+            await writer
+                .WriteLineAsync(string.Join('\t', _columns.Select(c => Columns.Title(c.Column))))
                 .ConfigureAwait(true);
 
             foreach (var row in rows)
             {
                 var indent = new string(' ', row.Depth * 2);
-                var cells = _columns.Select((c, i) =>
-                    i == 0 ? indent + Columns.Format(c.Column, row.Process) : Columns.Format(c.Column, row.Process));
+                var cells = _columns.Select(
+                    (c, i) =>
+                        i == 0
+                            ? indent + Columns.Format(c.Column, row.Process)
+                            : Columns.Format(c.Column, row.Process)
+                );
 
                 await writer.WriteLineAsync(string.Join('\t', cells)).ConfigureAwait(true);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            await ConfirmationDialog.ShowMessageAsync(this, "Save Process List", $"Could not write the file: {e.Message}")
+            await ConfirmationDialog
+                .ShowMessageAsync(
+                    this,
+                    "Save Process List",
+                    $"Could not write the file: {e.Message}"
+                )
                 .ConfigureAwait(true);
         }
     }
@@ -794,33 +830,35 @@ public partial class MainWindow : Window
     private async Task ShowHelperStatusAsync()
     {
         var available = PrivilegedClient.IsAvailable;
-        var reachable = available && await new PrivilegedClient().HandshakeAsync().ConfigureAwait(true);
+        var reachable =
+            available && await new PrivilegedClient().HandshakeAsync().ConfigureAwait(true);
 
         var message = (available, reachable) switch
         {
-            (false, _) =>
-                "The privileged helper is not installed.\n\n" +
-                "Without it, I/O counters, proportional memory and environments are blank " +
-                "for other users' processes, and cross-user actions fail. Everything else works.\n\n" +
-                "See docs/HELPER.md to install it.",
-            (true, false) =>
-                $"The helper socket exists but did not respond.\n\n" +
-                $"You may not be a member of the '{HelperConstants.AccessGroup}' group, " +
-                "or the helper may be a different version.",
+            (false, _) => "The privileged helper is not installed.\n\n"
+                + "Without it, I/O counters, proportional memory and environments are blank "
+                + "for other users' processes, and cross-user actions fail. Everything else works.\n\n"
+                + "See docs/HELPER.md to install it.",
+            (true, false) => $"The helper socket exists but did not respond.\n\n"
+                + $"You may not be a member of the '{HelperConstants.AccessGroup}' group, "
+                + "or the helper may be a different version.",
             _ => "The privileged helper is installed and responding.",
         };
 
-        await ConfirmationDialog.ShowMessageAsync(this, "Privileged Helper", message).ConfigureAwait(true);
+        await ConfirmationDialog
+            .ShowMessageAsync(this, "Privileged Helper", message)
+            .ConfigureAwait(true);
     }
 
     private Task ShowAboutAsync() =>
         ConfirmationDialog.ShowMessageAsync(
             this,
             "About Process Explorer",
-            "Sysinternals Process Explorer for Linux\n\n" +
-            "A Linux implementation of the Process Explorer experience, built on /proc.\n\n" +
-            $"Running on {Environment.OSVersion.VersionString}\n" +
-            $".NET {Environment.Version}");
+            "Sysinternals Process Explorer for Linux\n\n"
+                + "A Linux implementation of the Process Explorer experience, built on /proc.\n\n"
+                + $"Running on {Environment.OSVersion.VersionString}\n"
+                + $".NET {Environment.Version}"
+        );
 
     // ---- Helpers ------------------------------------------------------------
 
@@ -833,5 +871,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private static double Average(Queue<double> samples) => samples.Count == 0 ? 0 : samples.Average();
+    private static double Average(Queue<double> samples) =>
+        samples.Count == 0 ? 0 : samples.Average();
 }

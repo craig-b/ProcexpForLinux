@@ -31,7 +31,8 @@ internal static class ProcMaps
             // list that reads as "this process has no libraries loaded".
             throw Directory.Exists($"/proc/{id.Pid}")
                 ? ProviderException.NotPermitted(
-                    $"/proc/{id.Pid}/maps is readable only by the process owner")
+                    $"/proc/{id.Pid}/maps is readable only by the process owner"
+                )
                 : ProviderException.ProcessGone(id);
         }
         finally
@@ -51,7 +52,9 @@ internal static class ProcMaps
         // Several segments of the same file appear as separate lines with
         // different permissions — .text, .rodata, .data. Process Explorer shows
         // one row per module, so fold them together.
-        var byPath = new Dictionary<string, (ulong Low, ulong High, string Perms)>(StringComparer.Ordinal);
+        var byPath = new Dictionary<string, (ulong Low, ulong High, string Perms)>(
+            StringComparer.Ordinal
+        );
         var order = new List<string>();
 
         while (!content.IsEmpty)
@@ -76,15 +79,18 @@ internal static class ProcMaps
         foreach (var path in order)
         {
             var (low, high, perms) = byPath[path];
-            result.Add(new ModuleInfo
-            {
-                Path = path,
-                Name = Path.GetFileName(path) is { Length: > 0 } n ? n : path,
-                LoadAddress = low,
-                Size = high - low,
-                Permissions = perms,
-                IsSharedLibrary = perms.Contains('x') && path.Contains(".so", StringComparison.Ordinal),
-            });
+            result.Add(
+                new ModuleInfo
+                {
+                    Path = path,
+                    Name = Path.GetFileName(path) is { Length: > 0 } n ? n : path,
+                    LoadAddress = low,
+                    Size = high - low,
+                    Permissions = perms,
+                    IsSharedLibrary =
+                        perms.Contains('x') && path.Contains(".so", StringComparison.Ordinal),
+                }
+            );
         }
 
         return result;
@@ -93,7 +99,8 @@ internal static class ProcMaps
     private static void ParseLine(
         ReadOnlySpan<byte> line,
         Dictionary<string, (ulong Low, ulong High, string Perms)> byPath,
-        List<string> order)
+        List<string> order
+    )
     {
         var rest = line;
 
@@ -104,15 +111,18 @@ internal static class ProcMaps
             return;
         }
 
-        if (!TryParseHex(range[..dash], out var start) || !TryParseHex(range[(dash + 1)..], out var end))
+        if (
+            !TryParseHex(range[..dash], out var start)
+            || !TryParseHex(range[(dash + 1)..], out var end)
+        )
         {
             return;
         }
 
         var perms = ProcFile.NextField(ref rest);
-        ProcFile.NextField(ref rest);   // offset
-        ProcFile.NextField(ref rest);   // dev
-        ProcFile.NextField(ref rest);   // inode
+        ProcFile.NextField(ref rest); // offset
+        ProcFile.NextField(ref rest); // dev
+        ProcFile.NextField(ref rest); // inode
 
         // The pathname is space-padded to a column, so trim rather than split.
         var pathSpan = rest;
@@ -142,7 +152,8 @@ internal static class ProcMaps
             byPath[path] = (
                 Math.Min(existing.Low, start),
                 Math.Max(existing.High, end),
-                MergePermissions(existing.Perms, permString));
+                MergePermissions(existing.Perms, permString)
+            );
         }
         else
         {
@@ -184,6 +195,11 @@ internal static class ProcMaps
             chars[i] = (char)span[i];
         }
 
-        return ulong.TryParse(chars, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
+        return ulong.TryParse(
+            chars,
+            NumberStyles.HexNumber,
+            CultureInfo.InvariantCulture,
+            out value
+        );
     }
 }

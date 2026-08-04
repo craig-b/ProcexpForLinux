@@ -33,13 +33,18 @@ internal sealed class CpuDeltaTracker
 
         lock (_gate)
         {
-            var elapsedNanos = _previousTimestamp == 0
-                ? 0
-                : (ulong)(Stopwatch.GetElapsedTime(_previousTimestamp, now).TotalNanoseconds);
+            var elapsedNanos =
+                _previousTimestamp == 0
+                    ? 0
+                    : (ulong)(Stopwatch.GetElapsedTime(_previousTimestamp, now).TotalNanoseconds);
 
             foreach (var (id, cpu) in current)
             {
-                if (elapsedNanos > 0 && _previous.TryGetValue(id, out var previous) && cpu >= previous)
+                if (
+                    elapsedNanos > 0
+                    && _previous.TryGetValue(id, out var previous)
+                    && cpu >= previous
+                )
                 {
                     result[id] = (cpu - previous) / (double)elapsedNanos * 100.0;
                 }

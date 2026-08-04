@@ -49,7 +49,8 @@ public sealed class HistoryGraphView : Control
     public double? FixedMaximum { get; set; }
 
     /// <summary>Formats the current value for the corner label.</summary>
-    public Func<double, string> FormatValue { get; set; } = v => v.ToString("F1", CultureInfo.InvariantCulture);
+    public Func<double, string> FormatValue { get; set; } =
+        v => v.ToString("F1", CultureInfo.InvariantCulture);
 
     public string Title { get; set; } = "";
 
@@ -141,7 +142,8 @@ public sealed class HistoryGraphView : Control
 
         // The vertical grid scrolls with the data so it reads as movement rather
         // than as a static backdrop the line slides over.
-        var offset = (_series.Count > 0 ? _series[0].Values.Count : 0) % 5 * (bounds.Width / Capacity);
+        var offset =
+            (_series.Count > 0 ? _series[0].Values.Count : 0) % 5 * (bounds.Width / Capacity);
         for (var x = bounds.Width - offset; x > 0; x -= GridSpacing)
         {
             context.DrawLine(GridPen, new Point(x, 0), new Point(x, bounds.Height));
@@ -188,7 +190,8 @@ public sealed class HistoryGraphView : Control
             context.DrawGeometry(
                 new SolidColorBrush(series.Colour, 0.35),
                 new Pen(new SolidColorBrush(series.Colour), 1.2),
-                geometry);
+                geometry
+            );
         }
         else
         {
@@ -212,15 +215,20 @@ public sealed class HistoryGraphView : Control
         var scaleText = Format(scale, ScaleBrush);
         Draw(scale, new Point(bounds.Width - scaleText.Width - 4, 2), ScaleBrush);
 
-        var latest = _series.Count > 0 && _series[0].Values.Count > 0
-            ? _series[0].Values[^1]
-            : (double?)null;
+        var latest =
+            _series.Count > 0 && _series[0].Values.Count > 0
+                ? _series[0].Values[^1]
+                : (double?)null;
 
         if (latest is { } current)
         {
             var text = FormatValue(current);
             var formatted = Format(text, LabelBrush);
-            Draw(text, new Point(bounds.Width - formatted.Width - 4, bounds.Height - formatted.Height - 2), LabelBrush);
+            Draw(
+                text,
+                new Point(bounds.Width - formatted.Width - 4, bounds.Height - formatted.Height - 2),
+                LabelBrush
+            );
         }
 
         void Draw(string text, Point origin, IBrush brush) =>
@@ -228,12 +236,19 @@ public sealed class HistoryGraphView : Control
     }
 
     private FormattedText Format(string text, IBrush brush) =>
-        new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface(FontFamily.Default), 10, brush);
+        new(
+            text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(FontFamily.Default),
+            10,
+            brush
+        );
 
-    private IBrush Background => IsDarkMode
-        ? new SolidColorBrush(Color.FromRgb(20, 20, 20))
-        : new SolidColorBrush(Color.FromRgb(12, 12, 12));
+    private IBrush Background =>
+        IsDarkMode
+            ? new SolidColorBrush(Color.FromRgb(20, 20, 20))
+            : new SolidColorBrush(Color.FromRgb(12, 12, 12));
 
     private IPen GridPen => new Pen(new SolidColorBrush(Color.FromRgb(40, 70, 40)), 1);
 

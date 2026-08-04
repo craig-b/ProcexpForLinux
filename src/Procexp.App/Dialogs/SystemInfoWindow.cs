@@ -141,7 +141,11 @@ public sealed class SystemInfoWindow : Window
             {
                 new TabItem { Header = "Summary", Content = SummaryPage() },
                 new TabItem { Header = "CPU", Content = CpuPage() },
-                new TabItem { Header = "Memory", Content = Page([_memoryDetail, _swapDetail], _memoryInfo) },
+                new TabItem
+                {
+                    Header = "Memory",
+                    Content = Page([_memoryDetail, _swapDetail], _memoryInfo),
+                },
                 new TabItem { Header = "I/O", Content = Page([_diskDetail], _diskInfo) },
                 new TabItem { Header = "Network", Content = Page([_networkDetail], _networkInfo) },
                 new TabItem { Header = "GPU", Content = Page([_gpuDetail], _gpuInfo) },
@@ -253,7 +257,11 @@ public sealed class SystemInfoWindow : Window
 
     private static Control Page(IReadOnlyList<Control> graphs, Control detail)
     {
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(12, 12, 12, 0) };
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Margin = new Thickness(12, 12, 12, 0),
+        };
 
         foreach (var graph in graphs)
         {
@@ -294,13 +302,10 @@ public sealed class SystemInfoWindow : Window
 
     private void Update(SystemStats stats)
     {
-        var memoryPercent = stats.MemoryTotal == 0
-            ? 0
-            : stats.MemoryUsed * 100.0 / stats.MemoryTotal;
+        var memoryPercent =
+            stats.MemoryTotal == 0 ? 0 : stats.MemoryUsed * 100.0 / stats.MemoryTotal;
 
-        var swapPercent = stats.SwapTotal == 0
-            ? 0
-            : stats.SwapUsed * 100.0 / stats.SwapTotal;
+        var swapPercent = stats.SwapTotal == 0 ? 0 : stats.SwapUsed * 100.0 / stats.SwapTotal;
 
         _summaryCpu.Append(stats.CpuTotalPercent);
         _summaryMemory.Append(memoryPercent);
@@ -337,9 +342,18 @@ public sealed class SystemInfoWindow : Window
         _summaryNumbers.AddSection("Totals");
         _summaryNumbers.Add("Processes", _processCount.ToString(CultureInfo.InvariantCulture));
         _summaryNumbers.Add("Threads", _threadCount.ToString(CultureInfo.InvariantCulture));
-        _summaryNumbers.Add("Open descriptors", stats.HandleCount.ToString(CultureInfo.InvariantCulture));
-        _summaryNumbers.Add("CPU", string.Create(CultureInfo.InvariantCulture, $"{stats.CpuTotalPercent:F1}%"));
-        _summaryNumbers.Add("Memory in use", $"{ValueFormat.Bytes(stats.MemoryUsed)} of {ValueFormat.Bytes(stats.MemoryTotal)}");
+        _summaryNumbers.Add(
+            "Open descriptors",
+            stats.HandleCount.ToString(CultureInfo.InvariantCulture)
+        );
+        _summaryNumbers.Add(
+            "CPU",
+            string.Create(CultureInfo.InvariantCulture, $"{stats.CpuTotalPercent:F1}%")
+        );
+        _summaryNumbers.Add(
+            "Memory in use",
+            $"{ValueFormat.Bytes(stats.MemoryUsed)} of {ValueFormat.Bytes(stats.MemoryTotal)}"
+        );
         _summaryNumbers.Add("Uptime", Uptime());
 
         _memoryInfo.Clear();
@@ -350,12 +364,19 @@ public sealed class SystemInfoWindow : Window
         _memoryInfo.Add("Kernel", ValueFormat.Bytes(stats.MemoryKernel));
         _memoryInfo.Add(
             "Compressed",
-            stats.MemoryCompressed > 0 ? ValueFormat.Bytes(stats.MemoryCompressed) : "(no zram or zswap)",
-            showWhenEmpty: true);
+            stats.MemoryCompressed > 0
+                ? ValueFormat.Bytes(stats.MemoryCompressed)
+                : "(no zram or zswap)",
+            showWhenEmpty: true
+        );
         _memoryInfo.Add("Page size", ValueFormat.Bytes((ulong)_hardware.PageSize));
 
         _memoryInfo.AddSection("Swap");
-        _memoryInfo.Add("Total", stats.SwapTotal > 0 ? ValueFormat.Bytes(stats.SwapTotal) : "(none configured)", true);
+        _memoryInfo.Add(
+            "Total",
+            stats.SwapTotal > 0 ? ValueFormat.Bytes(stats.SwapTotal) : "(none configured)",
+            true
+        );
         _memoryInfo.Add("In use", ValueFormat.Bytes(stats.SwapUsed));
 
         _diskInfo.Clear();
@@ -368,7 +389,8 @@ public sealed class SystemInfoWindow : Window
             var used = volume.TotalBytes - volume.AvailableBytes;
             _diskInfo.Add(
                 volume.MountPoint,
-                $"{ValueFormat.Bytes(used)} of {ValueFormat.Bytes(volume.TotalBytes)} used  ({volume.FileSystem})");
+                $"{ValueFormat.Bytes(used)} of {ValueFormat.Bytes(volume.TotalBytes)} used  ({volume.FileSystem})"
+            );
         }
 
         _networkInfo.Clear();
@@ -378,7 +400,8 @@ public sealed class SystemInfoWindow : Window
 
         foreach (var nic in _hardware.NetworkInterfaces.Where(n => !n.IsLoopback))
         {
-            var addresses = nic.Addresses.Count > 0 ? string.Join(", ", nic.Addresses) : "(no address)";
+            var addresses =
+                nic.Addresses.Count > 0 ? string.Join(", ", nic.Addresses) : "(no address)";
             var speed = nic.SpeedMbps is { } mbps ? $", {mbps} Mb/s" : "";
             _networkInfo.Add(nic.Name, $"{(nic.IsUp ? "up" : "down")}{speed} — {addresses}");
         }
@@ -390,7 +413,10 @@ public sealed class SystemInfoWindow : Window
         _cpuInfo.AddSection("Processor");
         _cpuInfo.Add("Model", _hardware.CpuModel);
         _cpuInfo.Add("Vendor", _hardware.CpuVendor);
-        _cpuInfo.Add("Cores", $"{_hardware.PhysicalCores} physical, {_hardware.LogicalCores} logical");
+        _cpuInfo.Add(
+            "Cores",
+            $"{_hardware.PhysicalCores} physical, {_hardware.LogicalCores} logical"
+        );
         _cpuInfo.Add("Sockets", _hardware.Sockets.ToString(CultureInfo.InvariantCulture));
         _cpuInfo.Add("Base clock", _hardware.CpuMhz is { } mhz ? $"{mhz:F0} MHz" : null);
         _cpuInfo.Add("Maximum clock", _hardware.CpuMaxMhz is { } max ? $"{max:F0} MHz" : null);
@@ -418,12 +444,18 @@ public sealed class SystemInfoWindow : Window
 
         foreach (var device in _hardware.Gpus)
         {
-            _gpuInfo.Add(device.Name, $"{device.Driver ?? "unknown driver"}  {device.PciId ?? ""}".Trim());
+            _gpuInfo.Add(
+                device.Name,
+                $"{device.Driver ?? "unknown driver"}  {device.PciId ?? ""}".Trim()
+            );
         }
 
         if (_gpu.VideoMemory() is { } memory)
         {
-            _gpuInfo.Add("Video memory", $"{ValueFormat.Bytes(memory.Used)} of {ValueFormat.Bytes(memory.Total)} used");
+            _gpuInfo.Add(
+                "Video memory",
+                $"{ValueFormat.Bytes(memory.Used)} of {ValueFormat.Bytes(memory.Total)} used"
+            );
         }
         else
         {
@@ -440,7 +472,10 @@ public sealed class SystemInfoWindow : Window
 
         var span = DateTimeOffset.Now - boot;
         return span.TotalDays >= 1
-            ? string.Create(CultureInfo.InvariantCulture, $"{(int)span.TotalDays}d {span.Hours}h {span.Minutes}m")
+            ? string.Create(
+                CultureInfo.InvariantCulture,
+                $"{(int)span.TotalDays}d {span.Hours}h {span.Minutes}m"
+            )
             : string.Create(CultureInfo.InvariantCulture, $"{span.Hours}h {span.Minutes}m");
     }
 }

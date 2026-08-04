@@ -51,13 +51,23 @@ public static class ConfirmationDialog
         if (confirmation.IsRefused)
         {
             // Nothing to confirm — the action is not on offer. Only a way out.
-            var close = new Button { Content = "Close", MinWidth = 88, IsDefault = true };
+            var close = new Button
+            {
+                Content = "Close",
+                MinWidth = 88,
+                IsDefault = true,
+            };
             close.Click += (_, _) => dialog.Close();
             buttons.Children.Add(close);
         }
         else
         {
-            var cancel = new Button { Content = "Cancel", MinWidth = 88, IsCancel = true };
+            var cancel = new Button
+            {
+                Content = "Cancel",
+                MinWidth = 88,
+                IsCancel = true,
+            };
             cancel.Click += (_, _) => dialog.Close();
 
             var confirm = new Button
@@ -151,7 +161,12 @@ public static class ConfirmationDialog
             Spacing = 16,
             Children =
             {
-                new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, MaxWidth = 460 },
+                new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 460,
+                },
                 close,
             },
         };

@@ -28,49 +28,57 @@ public sealed record ProcessColorRule
     [
         new()
         {
-            Flag = ProcessFlags.NewProcess, IsEnabled = true,
+            Flag = ProcessFlags.NewProcess,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(198, 246, 198),
             BackgroundDark = Rgba.FromBytes(40, 90, 40),
         },
         new()
         {
-            Flag = ProcessFlags.DeadProcess, IsEnabled = true,
+            Flag = ProcessFlags.DeadProcess,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(246, 198, 198),
             BackgroundDark = Rgba.FromBytes(110, 40, 40),
         },
         new()
         {
-            Flag = ProcessFlags.Zombie, IsEnabled = true,
+            Flag = ProcessFlags.Zombie,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(246, 220, 190),
             BackgroundDark = Rgba.FromBytes(105, 70, 35),
         },
         new()
         {
-            Flag = ProcessFlags.Suspended, IsEnabled = true,
+            Flag = ProcessFlags.Suspended,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(200, 200, 200),
             BackgroundDark = Rgba.FromBytes(70, 70, 70),
         },
         new()
         {
-            Flag = ProcessFlags.Service, IsEnabled = true,
+            Flag = ProcessFlags.Service,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(255, 208, 208),
             BackgroundDark = Rgba.FromBytes(90, 55, 55),
         },
         new()
         {
-            Flag = ProcessFlags.OwnProcess, IsEnabled = true,
+            Flag = ProcessFlags.OwnProcess,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(208, 208, 255),
             BackgroundDark = Rgba.FromBytes(55, 55, 90),
         },
         new()
         {
-            Flag = ProcessFlags.Sandboxed, IsEnabled = true,
+            Flag = ProcessFlags.Sandboxed,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(208, 246, 246),
             BackgroundDark = Rgba.FromBytes(40, 80, 80),
         },
         new()
         {
-            Flag = ProcessFlags.Packed, IsEnabled = true,
+            Flag = ProcessFlags.Packed,
+            IsEnabled = true,
             BackgroundLight = Rgba.FromBytes(230, 208, 246),
             BackgroundDark = Rgba.FromBytes(70, 50, 90),
         },
@@ -80,7 +88,11 @@ public sealed record ProcessColorRule
     /// Resolve the background colour for a process. Returns null when no enabled
     /// rule matches, meaning the row keeps the default background.
     /// </summary>
-    public static Rgba? Background(ProcessFlags flags, IReadOnlyList<ProcessColorRule> rules, bool darkMode)
+    public static Rgba? Background(
+        ProcessFlags flags,
+        IReadOnlyList<ProcessColorRule> rules,
+        bool darkMode
+    )
     {
         foreach (var rule in rules)
         {

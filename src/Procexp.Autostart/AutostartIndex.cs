@@ -23,15 +23,16 @@ public sealed record AutostartEntry
     public string? ProgramPath { get; init; }
 
     /// <summary>Human-readable location for the Autostart Location column.</summary>
-    public string Display => Kind switch
-    {
-        AutostartKind.SystemdSystemUnit => $"systemd: {Name ?? DefinitionPath}",
-        AutostartKind.SystemdUserUnit => $"systemd --user: {Name ?? DefinitionPath}",
-        AutostartKind.XdgAutostart => $"XDG autostart: {Name ?? DefinitionPath}",
-        AutostartKind.Cron => $"cron: {DefinitionPath}",
-        AutostartKind.SysVInit => $"init.d: {Name ?? DefinitionPath}",
-        _ => DefinitionPath,
-    };
+    public string Display =>
+        Kind switch
+        {
+            AutostartKind.SystemdSystemUnit => $"systemd: {Name ?? DefinitionPath}",
+            AutostartKind.SystemdUserUnit => $"systemd --user: {Name ?? DefinitionPath}",
+            AutostartKind.XdgAutostart => $"XDG autostart: {Name ?? DefinitionPath}",
+            AutostartKind.Cron => $"cron: {DefinitionPath}",
+            AutostartKind.SysVInit => $"init.d: {Name ?? DefinitionPath}",
+            _ => DefinitionPath,
+        };
 }
 
 /// <summary>
@@ -57,10 +58,7 @@ public sealed class AutostartIndex
         "/lib/systemd/system",
     ];
 
-    private static readonly string[] SystemXdgDirectories =
-    [
-        "/etc/xdg/autostart",
-    ];
+    private static readonly string[] SystemXdgDirectories = ["/etc/xdg/autostart"];
 
     private readonly Lock _gate = new();
     private Dictionary<string, AutostartEntry>? _byProgram;
@@ -177,7 +175,8 @@ public sealed class AutostartIndex
         string directory,
         AutostartKind kind,
         Dictionary<string, AutostartEntry> byProgram,
-        Dictionary<string, AutostartEntry> byUnit)
+        Dictionary<string, AutostartEntry> byUnit
+    )
     {
         IEnumerable<string> files;
         try
@@ -269,7 +268,8 @@ public sealed class AutostartIndex
     private static void ScanDesktopEntries(
         string directory,
         Dictionary<string, AutostartEntry> byProgram,
-        Dictionary<string, AutostartEntry> byUnit)
+        Dictionary<string, AutostartEntry> byUnit
+    )
     {
         IEnumerable<string> files;
         try
@@ -304,8 +304,13 @@ public sealed class AutostartIndex
                 {
                     exec = line["Exec=".Length..].Trim();
                 }
-                else if (line.Equals("Hidden=true", StringComparison.OrdinalIgnoreCase) ||
-                         line.Equals("X-GNOME-Autostart-enabled=false", StringComparison.OrdinalIgnoreCase))
+                else if (
+                    line.Equals("Hidden=true", StringComparison.OrdinalIgnoreCase)
+                    || line.Equals(
+                        "X-GNOME-Autostart-enabled=false",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
                 {
                     hidden = true;
                 }
@@ -429,12 +434,15 @@ public sealed class AutostartIndex
                 var space = command.IndexOf(' ');
                 var program = space < 0 ? command : command[..space];
 
-                byProgram.TryAdd(program, new AutostartEntry
-                {
-                    DefinitionPath = file,
-                    Kind = AutostartKind.Cron,
-                    ProgramPath = program,
-                });
+                byProgram.TryAdd(
+                    program,
+                    new AutostartEntry
+                    {
+                        DefinitionPath = file,
+                        Kind = AutostartKind.Cron,
+                        ProgramPath = program,
+                    }
+                );
             }
         }
     }
@@ -446,7 +454,9 @@ public sealed class AutostartIndex
             yield return "/etc/crontab";
         }
 
-        foreach (var directory in new[] { "/etc/cron.d", "/var/spool/cron", "/var/spool/cron/crontabs" })
+        foreach (
+            var directory in new[] { "/etc/cron.d", "/var/spool/cron", "/var/spool/cron/crontabs" }
+        )
         {
             IEnumerable<string> files;
             try
@@ -479,13 +489,16 @@ public sealed class AutostartIndex
 
         foreach (var file in files)
         {
-            byProgram.TryAdd(file, new AutostartEntry
-            {
-                DefinitionPath = file,
-                Kind = AutostartKind.SysVInit,
-                Name = Path.GetFileName(file),
-                ProgramPath = file,
-            });
+            byProgram.TryAdd(
+                file,
+                new AutostartEntry
+                {
+                    DefinitionPath = file,
+                    Kind = AutostartKind.SysVInit,
+                    Name = Path.GetFileName(file),
+                    ProgramPath = file,
+                }
+            );
         }
     }
 }

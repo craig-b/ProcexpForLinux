@@ -89,8 +89,14 @@ internal sealed class SystemContext
                     continue;
                 }
 
-                if (uint.TryParse(line.AsSpan(second + 1, third - second - 1),
-                        NumberStyles.None, CultureInfo.InvariantCulture, out var uid))
+                if (
+                    uint.TryParse(
+                        line.AsSpan(second + 1, third - second - 1),
+                        NumberStyles.None,
+                        CultureInfo.InvariantCulture,
+                        out var uid
+                    )
+                )
                 {
                     result.TryAdd(uid, line[..first]);
                 }

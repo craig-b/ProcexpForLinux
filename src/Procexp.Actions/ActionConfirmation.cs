@@ -41,10 +41,25 @@ public static class ActionConfirmationPolicy
     /// </summary>
     private static readonly HashSet<string> CriticalNames = new(StringComparer.Ordinal)
     {
-        "systemd", "init", "systemd-journald", "systemd-udevd", "dbus-daemon",
-        "dbus-broker", "gdm", "sddm", "lightdm", "Xorg", "Xwayland",
-        "gnome-shell", "kwin_wayland", "kwin_x11", "plasmashell", "wayfire",
-        "sway", "mutter", "systemd-logind",
+        "systemd",
+        "init",
+        "systemd-journald",
+        "systemd-udevd",
+        "dbus-daemon",
+        "dbus-broker",
+        "gdm",
+        "sddm",
+        "lightdm",
+        "Xorg",
+        "Xwayland",
+        "gnome-shell",
+        "kwin_wayland",
+        "kwin_x11",
+        "plasmashell",
+        "wayfire",
+        "sway",
+        "mutter",
+        "systemd-logind",
     };
 
     public static ActionConfirmation ForKill(ProcessRecord process, bool isTree = false)
@@ -79,8 +94,9 @@ public static class ActionConfirmationPolicy
             return new ActionConfirmation
             {
                 Title = what,
-                Message = $"{subject} is a core system or session process. " +
-                          "Killing it will most likely end your desktop session or destabilise the machine.",
+                Message =
+                    $"{subject} is a core system or session process. "
+                    + "Killing it will most likely end your desktop session or destabilise the machine.",
                 Severity = ConfirmationSeverity.Critical,
             };
         }
@@ -91,8 +107,9 @@ public static class ActionConfirmationPolicy
             return new ActionConfirmation
             {
                 Title = what,
-                Message = $"{subject} belongs to {unit}. " +
-                          "systemd may restart it immediately, and stopping it properly needs systemctl.",
+                Message =
+                    $"{subject} belongs to {unit}. "
+                    + "systemd may restart it immediately, and stopping it properly needs systemctl.",
                 Severity = ConfirmationSeverity.Disruptive,
             };
         }
@@ -102,8 +119,9 @@ public static class ActionConfirmationPolicy
             return new ActionConfirmation
             {
                 Title = what,
-                Message = $"{subject} belongs to {process.UserName ?? process.Uid.ToString()}. " +
-                          "You will need elevated rights to signal it.",
+                Message =
+                    $"{subject} belongs to {process.UserName ?? process.Uid.ToString()}. "
+                    + "You will need elevated rights to signal it.",
                 Severity = ConfirmationSeverity.Disruptive,
             };
         }
@@ -125,8 +143,9 @@ public static class ActionConfirmationPolicy
             return new ActionConfirmation
             {
                 Title = "Suspend Process",
-                Message = $"{process.Name} is a core system or session process. " +
-                          "Suspending it will freeze your desktop, and you may not be able to resume it.",
+                Message =
+                    $"{process.Name} is a core system or session process. "
+                    + "Suspending it will freeze your desktop, and you may not be able to resume it.",
                 Severity = ConfirmationSeverity.Critical,
                 IsRefused = process.Id.Pid == 1,
             };
@@ -135,7 +154,8 @@ public static class ActionConfirmationPolicy
         return new ActionConfirmation
         {
             Title = "Suspend Process",
-            Message = $"Suspend {process.Name} (pid {process.Id.Pid})? It will stop running until resumed.",
+            Message =
+                $"Suspend {process.Name} (pid {process.Id.Pid})? It will stop running until resumed.",
             Severity = ConfirmationSeverity.Routine,
         };
     }
@@ -148,9 +168,10 @@ public static class ActionConfirmationPolicy
             return new ActionConfirmation
             {
                 Title = "Restart Process",
-                Message = $"{process.Name} is managed by {unit}. Restarting it here relaunches the " +
-                          "command line directly, without the environment, capabilities or cgroup systemd " +
-                          $"would give it. Prefer: systemctl restart {unit}",
+                Message =
+                    $"{process.Name} is managed by {unit}. Restarting it here relaunches the "
+                    + "command line directly, without the environment, capabilities or cgroup systemd "
+                    + $"would give it. Prefer: systemctl restart {unit}",
                 Severity = ConfirmationSeverity.Disruptive,
             };
         }
@@ -158,7 +179,8 @@ public static class ActionConfirmationPolicy
         return new ActionConfirmation
         {
             Title = "Restart Process",
-            Message = $"Terminate {process.Name} (pid {process.Id.Pid}) and start its command line again?",
+            Message =
+                $"Terminate {process.Name} (pid {process.Id.Pid}) and start its command line again?",
             Severity = ConfirmationSeverity.Routine,
         };
     }

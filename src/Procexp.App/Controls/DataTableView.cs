@@ -11,7 +11,8 @@ public sealed record TableColumn<T>(
     double Width,
     Func<T, string> Format,
     bool RightAligned = false,
-    Func<T, SortKey>? Sort = null)
+    Func<T, SortKey>? Sort = null
+)
 {
     /// <summary>
     /// Sort key for a row. Falls back to sorting on the displayed text, which is
@@ -32,7 +33,8 @@ public sealed record TableColumn<T>(
 /// <see cref="VirtualTableBase"/>; what remains here is a straightforward
 /// left-to-right draw.
 /// </remarks>
-public sealed class DataTableView<T> : VirtualTableBase where T : class
+public sealed class DataTableView<T> : VirtualTableBase
+    where T : class
 {
     private IReadOnlyList<T> _rows = [];
     private IReadOnlyList<TableColumn<T>> _columns = [];
@@ -55,7 +57,8 @@ public sealed class DataTableView<T> : VirtualTableBase where T : class
 
     protected override double ScrollableWidth => _columns.Sum(c => c.Width);
 
-    public T? SelectedItem => SelectedIndex >= 0 && SelectedIndex < _rows.Count ? _rows[SelectedIndex] : null;
+    public T? SelectedItem =>
+        SelectedIndex >= 0 && SelectedIndex < _rows.Count ? _rows[SelectedIndex] : null;
 
     public IReadOnlyList<T> Rows => _rows;
 
@@ -102,11 +105,13 @@ public sealed class DataTableView<T> : VirtualTableBase where T : class
         var column = _columns[Math.Clamp(_sortColumn, 0, _columns.Count - 1)];
         var sorted = rows.ToList();
 
-        sorted.Sort((a, b) =>
-        {
-            var result = column.SortValue(a).CompareTo(column.SortValue(b));
-            return _sortDescending ? -result : result;
-        });
+        sorted.Sort(
+            (a, b) =>
+            {
+                var result = column.SortValue(a).CompareTo(column.SortValue(b));
+                return _sortDescending ? -result : result;
+            }
+        );
 
         return sorted;
     }
@@ -127,19 +132,29 @@ public sealed class DataTableView<T> : VirtualTableBase where T : class
                     context,
                     new Rect(0, y, Math.Max(ScrollableWidth, Bounds.Width), RowHeight),
                     i,
-                    colour is { } rgba ? Palette.RowBrush(rgba) : null);
+                    colour is { } rgba ? Palette.RowBrush(rgba) : null
+                );
 
                 double x = 0;
                 foreach (var column in _columns)
                 {
-                    if (x + column.Width >= HorizontalOffset && x <= HorizontalOffset + ScrollableViewportWidth)
+                    if (
+                        x + column.Width >= HorizontalOffset
+                        && x <= HorizontalOffset + ScrollableViewportWidth
+                    )
                     {
                         DrawCell(
                             context,
                             column.Format(item),
-                            new Rect(x + CellPadding, y, Math.Max(0, column.Width - (CellPadding * 2)), RowHeight),
+                            new Rect(
+                                x + CellPadding,
+                                y,
+                                Math.Max(0, column.Width - (CellPadding * 2)),
+                                RowHeight
+                            ),
                             column.RightAligned,
-                            i == SelectedIndex);
+                            i == SelectedIndex
+                        );
                     }
 
                     x += column.Width;
@@ -154,26 +169,44 @@ public sealed class DataTableView<T> : VirtualTableBase where T : class
     {
         var width = Math.Max(ScrollableWidth, Bounds.Width + HorizontalOffset);
         context.FillRectangle(Palette.HeaderBackground, new Rect(0, 0, width, HeaderHeight));
-        context.DrawLine(Palette.Divider, new Point(0, HeaderHeight), new Point(width, HeaderHeight));
+        context.DrawLine(
+            Palette.Divider,
+            new Point(0, HeaderHeight),
+            new Point(width, HeaderHeight)
+        );
 
         double x = 0;
         for (var c = 0; c < _columns.Count; c++)
         {
             var column = _columns[c];
 
-            if (x + column.Width >= HorizontalOffset && x <= HorizontalOffset + ScrollableViewportWidth)
+            if (
+                x + column.Width >= HorizontalOffset
+                && x <= HorizontalOffset + ScrollableViewportWidth
+            )
             {
-                var label = c == _sortColumn
-                    ? $"{column.Title} {(_sortDescending ? "▾" : "▴")}"
-                    : column.Title;
+                var label =
+                    c == _sortColumn
+                        ? $"{column.Title} {(_sortDescending ? "▾" : "▴")}"
+                        : column.Title;
 
                 DrawHeaderCell(
                     context,
                     label,
-                    new Rect(x + CellPadding, 0, Math.Max(0, column.Width - (CellPadding * 2)), HeaderHeight),
-                    column.RightAligned);
+                    new Rect(
+                        x + CellPadding,
+                        0,
+                        Math.Max(0, column.Width - (CellPadding * 2)),
+                        HeaderHeight
+                    ),
+                    column.RightAligned
+                );
 
-                context.DrawLine(Palette.Divider, new Point(x + column.Width, 0), new Point(x + column.Width, HeaderHeight));
+                context.DrawLine(
+                    Palette.Divider,
+                    new Point(x + column.Width, 0),
+                    new Point(x + column.Width, HeaderHeight)
+                );
             }
 
             x += column.Width;
@@ -190,11 +223,20 @@ public sealed class DataTableView<T> : VirtualTableBase where T : class
         }
 
         var formatted = TextCache.Get(
-            EmptyMessage, Math.Max(40, Bounds.Width - 40), Palette.HeaderText, emphasised: false, selected: false);
+            EmptyMessage,
+            Math.Max(40, Bounds.Width - 40),
+            Palette.HeaderText,
+            emphasised: false,
+            selected: false
+        );
 
-        context.DrawText(formatted, new Point(
-            Math.Max(CellPadding, (Bounds.Width - formatted.Width) / 2),
-            HeaderHeight + 16));
+        context.DrawText(
+            formatted,
+            new Point(
+                Math.Max(CellPadding, (Bounds.Width - formatted.Width) / 2),
+                HeaderHeight + 16
+            )
+        );
     }
 
     // ---- Input --------------------------------------------------------------

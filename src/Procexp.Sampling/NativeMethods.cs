@@ -77,8 +77,10 @@ internal static partial class NativeMethods
                 var name = (byte*)(entry + DirentNameOffset);
 
                 // Skip "." and ".." without materialising a string.
-                if (name[0] == (byte)'.' &&
-                    (name[1] == 0 || (name[1] == (byte)'.' && name[2] == 0)))
+                if (
+                    name[0] == (byte)'.'
+                    && (name[1] == 0 || (name[1] == (byte)'.' && name[2] == 0))
+                )
                 {
                     continue;
                 }

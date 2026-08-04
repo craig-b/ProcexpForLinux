@@ -9,7 +9,8 @@ internal readonly record struct CgroupClassification(
     string? Path,
     string? Unit,
     bool IsService,
-    ImageKind ContainerKind);
+    ImageKind ContainerKind
+);
 
 internal static class CgroupInfo
 {
@@ -78,7 +79,8 @@ internal static class CgroupInfo
             best,
             ExtractUnit(best),
             IsService(best),
-            DetectContainer(best));
+            DetectContainer(best)
+        );
     }
 
     /// <summary>
@@ -95,11 +97,13 @@ internal static class CgroupInfo
             var slash = span.LastIndexOf('/');
             var component = slash < 0 ? span : span[(slash + 1)..];
 
-            if (component.EndsWith(".service", StringComparison.Ordinal) ||
-                component.EndsWith(".scope", StringComparison.Ordinal) ||
-                component.EndsWith(".socket", StringComparison.Ordinal) ||
-                component.EndsWith(".mount", StringComparison.Ordinal) ||
-                component.EndsWith(".timer", StringComparison.Ordinal))
+            if (
+                component.EndsWith(".service", StringComparison.Ordinal)
+                || component.EndsWith(".scope", StringComparison.Ordinal)
+                || component.EndsWith(".socket", StringComparison.Ordinal)
+                || component.EndsWith(".mount", StringComparison.Ordinal)
+                || component.EndsWith(".timer", StringComparison.Ordinal)
+            )
             {
                 // user@1000.service is the per-user manager, not the thing that
                 // launched this process — keep looking further up.
@@ -125,22 +129,26 @@ internal static class CgroupInfo
     /// to a user session process or a login shell's child.
     /// </summary>
     private static bool IsService(string path) =>
-        path.StartsWith("/system.slice/", StringComparison.Ordinal) ||
-        path.StartsWith("/init.scope", StringComparison.Ordinal);
+        path.StartsWith("/system.slice/", StringComparison.Ordinal)
+        || path.StartsWith("/init.scope", StringComparison.Ordinal);
 
     private static ImageKind DetectContainer(string path)
     {
-        if (path.Contains("/docker-", StringComparison.Ordinal) ||
-            path.Contains("/docker/", StringComparison.Ordinal) ||
-            path.Contains("/libpod-", StringComparison.Ordinal) ||
-            path.Contains("/crio-", StringComparison.Ordinal) ||
-            path.Contains("/kubepods", StringComparison.Ordinal))
+        if (
+            path.Contains("/docker-", StringComparison.Ordinal)
+            || path.Contains("/docker/", StringComparison.Ordinal)
+            || path.Contains("/libpod-", StringComparison.Ordinal)
+            || path.Contains("/crio-", StringComparison.Ordinal)
+            || path.Contains("/kubepods", StringComparison.Ordinal)
+        )
         {
             return ImageKind.Container;
         }
 
-        if (path.Contains("/lxc.payload", StringComparison.Ordinal) ||
-            path.Contains("/lxc/", StringComparison.Ordinal))
+        if (
+            path.Contains("/lxc.payload", StringComparison.Ordinal)
+            || path.Contains("/lxc/", StringComparison.Ordinal)
+        )
         {
             return ImageKind.Container;
         }
@@ -150,8 +158,10 @@ internal static class CgroupInfo
             return ImageKind.Snap;
         }
 
-        if (path.Contains("app-flatpak-", StringComparison.Ordinal) ||
-            path.Contains(".flatpak-", StringComparison.Ordinal))
+        if (
+            path.Contains("app-flatpak-", StringComparison.Ordinal)
+            || path.Contains(".flatpak-", StringComparison.Ordinal)
+        )
         {
             return ImageKind.Flatpak;
         }

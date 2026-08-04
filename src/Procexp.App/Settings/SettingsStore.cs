@@ -66,7 +66,10 @@ public static class SettingsStore
         {
             var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
             var root = string.IsNullOrEmpty(xdg)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config")
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".config"
+                )
                 : xdg;
 
             return Path.Combine(root, "procexp");
@@ -129,12 +132,22 @@ public static class SettingsStore
         return settings with
         {
             Columns = columns,
-            ColumnSets = [.. settings.ColumnSets.Select(s => s with { Columns = Columns_.Normalise(s.Columns) })],
+            ColumnSets =
+            [
+                .. settings.ColumnSets.Select(s =>
+                    s with
+                    {
+                        Columns = Columns_.Normalise(s.Columns),
+                    }
+                ),
+            ],
             RefreshSeconds = Math.Clamp(settings.RefreshSeconds, 0.25, 60),
             NamePaneWidth = Math.Clamp(settings.NamePaneWidth, 120, 900),
             WindowWidth = Math.Clamp(settings.WindowWidth, 640, 10000),
             WindowHeight = Math.Clamp(settings.WindowHeight, 480, 10000),
-            SortColumn = Model.Columns.IsSupported(settings.SortColumn) ? settings.SortColumn : Column.Cpu,
+            SortColumn = Model.Columns.IsSupported(settings.SortColumn)
+                ? settings.SortColumn
+                : Column.Cpu,
         };
     }
 }

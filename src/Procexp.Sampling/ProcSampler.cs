@@ -36,17 +36,19 @@ public sealed class ProcSampler : IProcessDataProvider
         {
             // Threads and modules need no privilege on Linux, unlike macOS where
             // both hinge on obtaining a task port.
-            var capabilities = ProviderCapabilities.AccurateCpu |
-                               ProviderCapabilities.Threads |
-                               ProviderCapabilities.Modules |
-                               ProviderCapabilities.CrossUser;
+            var capabilities =
+                ProviderCapabilities.AccurateCpu
+                | ProviderCapabilities.Threads
+                | ProviderCapabilities.Modules
+                | ProviderCapabilities.CrossUser;
 
             // Running as root removes the only remaining restrictions.
             if (_context.OwnUid == 0)
             {
-                capabilities |= ProviderCapabilities.ProcessIo |
-                                ProviderCapabilities.ProportionalMemory |
-                                ProviderCapabilities.Environment;
+                capabilities |=
+                    ProviderCapabilities.ProcessIo
+                    | ProviderCapabilities.ProportionalMemory
+                    | ProviderCapabilities.Environment;
             }
 
             return capabilities;
@@ -57,7 +59,8 @@ public sealed class ProcSampler : IProcessDataProvider
 
     public async IAsyncEnumerable<ProcessSnapshot> Snapshots(
         TimeSpan interval,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
         _cpuTracker.Reset();
 
@@ -72,8 +75,9 @@ public sealed class ProcSampler : IProcessDataProvider
         }
     }
 
-    public ValueTask<ProcessSnapshot> SnapshotAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(Sample(0));
+    public ValueTask<ProcessSnapshot> SnapshotAsync(
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(Sample(0));
 
     // ---- One sweep ----------------------------------------------------------
 
@@ -170,8 +174,7 @@ public sealed class ProcSampler : IProcessDataProvider
             var slash = entry.LastIndexOf('/');
             var name = slash < 0 ? entry.AsSpan() : entry.AsSpan(slash + 1);
 
-            if (name.Length > 0 && char.IsAsciiDigit(name[0]) &&
-                int.TryParse(name, out var pid))
+            if (name.Length > 0 && char.IsAsciiDigit(name[0]) && int.TryParse(name, out var pid))
             {
                 yield return pid;
             }
@@ -182,8 +185,10 @@ public sealed class ProcSampler : IProcessDataProvider
     {
         var prefix = $"/proc/{pid}";
 
-        if (!ProcFile.TryRead($"{prefix}/stat", ref buffer, out var length) ||
-            !ProcStat.TryParse(buffer.AsSpan(0, length), out var stat))
+        if (
+            !ProcFile.TryRead($"{prefix}/stat", ref buffer, out var length)
+            || !ProcStat.TryParse(buffer.AsSpan(0, length), out var stat)
+        )
         {
             // The process exited between the directory listing and this read.
             // Entirely routine on a busy system.
@@ -297,9 +302,8 @@ public sealed class ProcSampler : IProcessDataProvider
         // limited, which is what drives the blank I/O cells.
         var canReadRestricted = uid == _context.OwnUid || _context.OwnUid == 0;
 
-        var name = stat.Comm.Length > 0
-            ? stat.Comm
-            : Path.GetFileName(executablePath) ?? $"pid {pid}";
+        var name =
+            stat.Comm.Length > 0 ? stat.Comm : Path.GetFileName(executablePath) ?? $"pid {pid}";
 
         // ---- I/O counters (owner-restricted)
         ulong? ioRead = null;
@@ -322,9 +326,14 @@ public sealed class ProcSampler : IProcessDataProvider
         ulong? pss = null;
         if (_options.IncludeProportionalSetSize && !isKernelThread)
         {
-            if (canReadRestricted && ProcFile.TryRead($"{prefix}/smaps_rollup", ref buffer, out length))
+            if (
+                canReadRestricted
+                && ProcFile.TryRead($"{prefix}/smaps_rollup", ref buffer, out length)
+            )
             {
-                pss = ProcFile.ParseKilobytes(ProcFile.FindKeyedValue(buffer.AsSpan(0, length), "Pss"u8));
+                pss = ProcFile.ParseKilobytes(
+                    ProcFile.FindKeyedValue(buffer.AsSpan(0, length), "Pss"u8)
+                );
             }
             else
             {
@@ -392,10 +401,15 @@ public sealed class ProcSampler : IProcessDataProvider
         var record = new ProcessRecord
         {
             Id = id,
-            Parent = null,                       // resolved in the second pass
+            Parent = null, // resolved in the second pass
             Name = name,
             ExecutablePath = executablePath,
-            ImageKind = ClassifyImage(cgroup.ContainerKind, isKernelThread, cgroup.IsService, executablePath),
+            ImageKind = ClassifyImage(
+                cgroup.ContainerKind,
+                isKernelThread,
+                cgroup.IsService,
+                executablePath
+            ),
             Uid = uid,
             Gid = gid,
             UserName = _context.UserName(uid),
@@ -423,9 +437,10 @@ public sealed class ProcSampler : IProcessDataProvider
             MajorFaults = stat.MajorFaults,
             DiskBytesRead = ioRead,
             DiskBytesWritten = ioWritten,
-            FileDescriptorCount = _options.IncludeFileDescriptorCount && !isKernelThread
-                ? ProcFile.TryCountEntries($"{prefix}/fd")
-                : null,
+            FileDescriptorCount =
+                _options.IncludeFileDescriptorCount && !isKernelThread
+                    ? ProcFile.TryCountEntries($"{prefix}/fd")
+                    : null,
             Nice = stat.Nice,
             Priority = stat.Priority,
             CgroupPath = cgroup.Path,
@@ -433,13 +448,19 @@ public sealed class ProcSampler : IProcessDataProvider
             SecurityLabel = securityLabel,
             Flags = flags,
             StartTime = _context.BootTime.AddSeconds(
-                stat.StartTimeTicks / (double)NativeMethods.ClockTicksPerSecond),
+                stat.StartTimeTicks / (double)NativeMethods.ClockTicksPerSecond
+            ),
         };
 
         return (record, stat.Ppid);
     }
 
-    private static ImageKind ClassifyImage(ImageKind containerKind, bool isKernelThread, bool isService, string? path)
+    private static ImageKind ClassifyImage(
+        ImageKind containerKind,
+        bool isKernelThread,
+        bool isService,
+        string? path
+    )
     {
         if (isKernelThread)
         {
@@ -515,16 +536,25 @@ public sealed class ProcSampler : IProcessDataProvider
 
     // ---- Per-selection detail (filled in by the detail providers) ------------
 
-    public ValueTask<IReadOnlyList<ThreadInfo>> ThreadsAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(ProcThreads.Read(id));
+    public ValueTask<IReadOnlyList<ThreadInfo>> ThreadsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(ProcThreads.Read(id));
 
-    public ValueTask<IReadOnlyList<ModuleInfo>> ModulesAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(ProcMaps.Read(id));
+    public ValueTask<IReadOnlyList<ModuleInfo>> ModulesAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(ProcMaps.Read(id));
 
-    public ValueTask<IReadOnlyList<FileDescriptorInfo>> FileDescriptorsAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(ProcFileDescriptors.Read(id));
+    public ValueTask<IReadOnlyList<FileDescriptorInfo>> FileDescriptorsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(ProcFileDescriptors.Read(id));
 
-    public ValueTask<string?> CommandLineAsync(ProcessId id, CancellationToken cancellationToken = default)
+    public ValueTask<string?> CommandLineAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var buffer = ProcFile.RentBuffer();
         try
@@ -537,14 +567,19 @@ public sealed class ProcSampler : IProcessDataProvider
         }
     }
 
-    public ValueTask<IReadOnlyDictionary<string, string>> EnvironmentAsync(ProcessId id, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyDictionary<string, string>> EnvironmentAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var buffer = ProcFile.RentBuffer(16384);
         try
         {
             if (!ProcFile.TryRead($"/proc/{id.Pid}/environ", ref buffer, out var length))
             {
-                throw ProviderException.NotPermitted($"/proc/{id.Pid}/environ is restricted to the owning user");
+                throw ProviderException.NotPermitted(
+                    $"/proc/{id.Pid}/environ is restricted to the owning user"
+                );
             }
 
             var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -560,7 +595,9 @@ public sealed class ProcSampler : IProcessDataProvider
                     var eq = entry.IndexOf((byte)'=');
                     if (eq > 0)
                     {
-                        result[ProcFile.ToString(entry[..eq])] = ProcFile.ToString(entry[(eq + 1)..]);
+                        result[ProcFile.ToString(entry[..eq])] = ProcFile.ToString(
+                            entry[(eq + 1)..]
+                        );
                     }
                 }
 
@@ -580,10 +617,15 @@ public sealed class ProcSampler : IProcessDataProvider
         }
     }
 
-    public ValueTask<string?> CurrentDirectoryAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(ProcFile.ReadLink($"/proc/{id.Pid}/cwd"));
+    public ValueTask<string?> CurrentDirectoryAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(ProcFile.ReadLink($"/proc/{id.Pid}/cwd"));
 
-    public ValueTask<IReadOnlyList<string>> StringsAsync(ProcessId id, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<string>> StringsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var path = ProcFile.ReadLink($"/proc/{id.Pid}/exe");
         return path is null

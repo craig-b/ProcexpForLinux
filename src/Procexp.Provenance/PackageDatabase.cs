@@ -38,8 +38,12 @@ public sealed record PackageOwnership
 /// </remarks>
 public sealed class PackageDatabase
 {
-    private readonly Dictionary<string, PackageOwnership?> _ownershipCache = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, PackageOwnership> _detailCache = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PackageOwnership?> _ownershipCache = new(
+        StringComparer.Ordinal
+    );
+    private readonly Dictionary<string, PackageOwnership> _detailCache = new(
+        StringComparer.Ordinal
+    );
     private readonly Lock _gate = new();
 
     public PackageManagerKind Kind { get; } = Detect();
@@ -93,14 +97,15 @@ public sealed class PackageDatabase
         return result;
     }
 
-    private PackageOwnership? QueryOwner(string path) => Kind switch
-    {
-        PackageManagerKind.Pacman => QueryPacman(path),
-        PackageManagerKind.Dpkg => QueryDpkg(path),
-        PackageManagerKind.Rpm => QueryRpm(path),
-        PackageManagerKind.Apk => QueryApk(path),
-        _ => null,
-    };
+    private PackageOwnership? QueryOwner(string path) =>
+        Kind switch
+        {
+            PackageManagerKind.Pacman => QueryPacman(path),
+            PackageManagerKind.Dpkg => QueryDpkg(path),
+            PackageManagerKind.Rpm => QueryRpm(path),
+            PackageManagerKind.Apk => QueryApk(path),
+            _ => null,
+        };
 
     // "/usr/bin/ls is owned by coreutils 9.7-2"
     private PackageOwnership? QueryPacman(string path)
@@ -118,7 +123,9 @@ public sealed class PackageDatabase
     private static PackageOwnership ParsePacmanDetail(string name)
     {
         var info = Run("pacman", ["-Qi", name]);
-        string? version = null, packager = null, description = null;
+        string? version = null,
+            packager = null,
+            description = null;
 
         if (info is not null)
         {
@@ -133,9 +140,12 @@ public sealed class PackageDatabase
                 var key = line[..colon].Trim();
                 var value = line[(colon + 1)..].Trim();
 
-                if (key == "Version") version = value;
-                else if (key == "Packager") packager = value;
-                else if (key == "Description") description = value;
+                if (key == "Version")
+                    version = value;
+                else if (key == "Packager")
+                    packager = value;
+                else if (key == "Description")
+                    description = value;
             }
         }
 
@@ -170,23 +180,37 @@ public sealed class PackageDatabase
             return null;
         }
 
-        return Detail(name, () =>
-        {
-            var fields = Run("dpkg-query", ["-W", "-f=${Version}\\n${Maintainer}\\n${Description}", name]);
-            var parts = fields?.Split('\n') ?? [];
-            return new PackageOwnership
+        return Detail(
+            name,
+            () =>
             {
-                PackageName = name,
-                Version = parts.Length > 0 ? parts[0].Trim() : null,
-                Packager = parts.Length > 1 ? parts[1].Trim() : null,
-                Description = parts.Length > 2 ? parts[2].Trim() : null,
-            };
-        });
+                var fields = Run(
+                    "dpkg-query",
+                    ["-W", "-f=${Version}\\n${Maintainer}\\n${Description}", name]
+                );
+                var parts = fields?.Split('\n') ?? [];
+                return new PackageOwnership
+                {
+                    PackageName = name,
+                    Version = parts.Length > 0 ? parts[0].Trim() : null,
+                    Packager = parts.Length > 1 ? parts[1].Trim() : null,
+                    Description = parts.Length > 2 ? parts[2].Trim() : null,
+                };
+            }
+        );
     }
 
     private PackageOwnership? QueryRpm(string path)
     {
-        var output = Run("rpm", ["-qf", "--queryformat", "%{NAME}\\n%{VERSION}-%{RELEASE}\\n%{PACKAGER}\\n%{SUMMARY}", path]);
+        var output = Run(
+            "rpm",
+            [
+                "-qf",
+                "--queryformat",
+                "%{NAME}\\n%{VERSION}-%{RELEASE}\\n%{PACKAGER}\\n%{SUMMARY}",
+                path,
+            ]
+        );
         if (output is null)
         {
             return null;
@@ -298,24 +322,28 @@ public sealed class PackageDatabase
     /// Null means "could not determine", which is different from "modified" and
     /// must not be rendered as a warning.
     /// </remarks>
-    public bool? IsUnmodified(string path, string packageName) => Kind switch
-    {
-        // pacman -Qkk reports mismatching properties per file; no output for the
-        // path means it matches.
-        PackageManagerKind.Pacman =>
-            Run("pacman", ["-Qkk", packageName]) is { } output ? !output.Contains(path, StringComparison.Ordinal) : null,
+    public bool? IsUnmodified(string path, string packageName) =>
+        Kind switch
+        {
+            // pacman -Qkk reports mismatching properties per file; no output for the
+            // path means it matches.
+            PackageManagerKind.Pacman => Run("pacman", ["-Qkk", packageName]) is { } output
+                ? !output.Contains(path, StringComparison.Ordinal)
+                : null,
 
-        // rpm -V lists only files that differ.
-        PackageManagerKind.Rpm =>
-            Run("rpm", ["-V", packageName]) is { } output ? !output.Contains(path, StringComparison.Ordinal) : null,
+            // rpm -V lists only files that differ.
+            PackageManagerKind.Rpm => Run("rpm", ["-V", packageName]) is { } output
+                ? !output.Contains(path, StringComparison.Ordinal)
+                : null,
 
-        // debsums exits non-zero and prints "FAILED" for mismatches. It is not
-        // installed by default on Debian, so absence is unknown, not a pass.
-        PackageManagerKind.Dpkg =>
-            Run("debsums", ["-s", packageName]) is { } output ? !output.Contains("FAILED", StringComparison.Ordinal) : null,
+            // debsums exits non-zero and prints "FAILED" for mismatches. It is not
+            // installed by default on Debian, so absence is unknown, not a pass.
+            PackageManagerKind.Dpkg => Run("debsums", ["-s", packageName]) is { } output
+                ? !output.Contains("FAILED", StringComparison.Ordinal)
+                : null,
 
-        _ => null,
-    };
+            _ => null,
+        };
 
     private static string? Run(string file, string[] arguments)
     {
@@ -362,7 +390,12 @@ public sealed class PackageDatabase
             // empty result as failure.
             return string.IsNullOrWhiteSpace(output) ? null : output;
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        catch (Exception e)
+            when (e
+                    is System.ComponentModel.Win32Exception
+                        or IOException
+                        or InvalidOperationException
+            )
         {
             // The tool is not installed.
             return null;

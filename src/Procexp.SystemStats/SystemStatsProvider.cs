@@ -55,9 +55,10 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
             lock (_gate)
             {
                 var now = Stopwatch.GetTimestamp();
-                var seconds = _previousTimestamp == 0
-                    ? 0
-                    : Stopwatch.GetElapsedTime(_previousTimestamp, now).TotalSeconds;
+                var seconds =
+                    _previousTimestamp == 0
+                        ? 0
+                        : Stopwatch.GetElapsedTime(_previousTimestamp, now).TotalSeconds;
 
                 diskRate = Rate(diskBytes, _previousDiskBytes, seconds);
                 networkRate = Rate(networkBytes, _previousNetworkBytes, seconds);
@@ -117,11 +118,11 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
         {
             if (!line.StartsWith("cpu"u8))
             {
-                break;   // The cpu lines come first; stop as soon as they end.
+                break; // The cpu lines come first; stop as soon as they end.
             }
 
             var rest = line;
-            ProcReader.NextField(ref rest);   // "cpu" or "cpuN"
+            ProcReader.NextField(ref rest); // "cpu" or "cpuN"
 
             // user nice system idle iowait irq softirq steal guest guest_nice
             ulong sum = 0;
@@ -177,9 +178,10 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
             {
                 var totalDelta = totals[i] - previousTotal[i];
                 var idleDelta = idles[i] - previousIdle[i];
-                percentages[i] = totalDelta == 0
-                    ? 0
-                    : Math.Clamp((totalDelta - idleDelta) * 100.0 / totalDelta, 0, 100);
+                percentages[i] =
+                    totalDelta == 0
+                        ? 0
+                        : Math.Clamp((totalDelta - idleDelta) * 100.0 / totalDelta, 0, 100);
             }
 
             // Index 0 is the aggregate "cpu" line; the rest are the cores.
@@ -190,7 +192,13 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
     // ---- Memory -------------------------------------------------------------
 
     private readonly record struct MemoryFacts(
-        ulong Total, ulong Used, ulong Cached, ulong Kernel, ulong SwapTotal, ulong SwapUsed);
+        ulong Total,
+        ulong Used,
+        ulong Cached,
+        ulong Kernel,
+        ulong SwapTotal,
+        ulong SwapUsed
+    );
 
     private static MemoryFacts ReadMemory(ref byte[] buffer)
     {
@@ -199,9 +207,16 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
             return default;
         }
 
-        ulong total = 0, available = 0, cached = 0, buffers = 0;
-        ulong slab = 0, kernelStack = 0, pageTables = 0, unevictable = 0;
-        ulong swapTotal = 0, swapFree = 0;
+        ulong total = 0,
+            available = 0,
+            cached = 0,
+            buffers = 0;
+        ulong slab = 0,
+            kernelStack = 0,
+            pageTables = 0,
+            unevictable = 0;
+        ulong swapTotal = 0,
+            swapFree = 0;
 
         foreach (var line in ProcReader.Lines(buffer.AsSpan(0, length)))
         {
@@ -214,16 +229,26 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
             var key = line[..colon];
             var value = line[(colon + 1)..];
 
-            if (key.SequenceEqual("MemTotal"u8)) total = Kilobytes(value);
-            else if (key.SequenceEqual("MemAvailable"u8)) available = Kilobytes(value);
-            else if (key.SequenceEqual("Cached"u8)) cached = Kilobytes(value);
-            else if (key.SequenceEqual("Buffers"u8)) buffers = Kilobytes(value);
-            else if (key.SequenceEqual("Slab"u8)) slab = Kilobytes(value);
-            else if (key.SequenceEqual("KernelStack"u8)) kernelStack = Kilobytes(value);
-            else if (key.SequenceEqual("PageTables"u8)) pageTables = Kilobytes(value);
-            else if (key.SequenceEqual("Unevictable"u8)) unevictable = Kilobytes(value);
-            else if (key.SequenceEqual("SwapTotal"u8)) swapTotal = Kilobytes(value);
-            else if (key.SequenceEqual("SwapFree"u8)) swapFree = Kilobytes(value);
+            if (key.SequenceEqual("MemTotal"u8))
+                total = Kilobytes(value);
+            else if (key.SequenceEqual("MemAvailable"u8))
+                available = Kilobytes(value);
+            else if (key.SequenceEqual("Cached"u8))
+                cached = Kilobytes(value);
+            else if (key.SequenceEqual("Buffers"u8))
+                buffers = Kilobytes(value);
+            else if (key.SequenceEqual("Slab"u8))
+                slab = Kilobytes(value);
+            else if (key.SequenceEqual("KernelStack"u8))
+                kernelStack = Kilobytes(value);
+            else if (key.SequenceEqual("PageTables"u8))
+                pageTables = Kilobytes(value);
+            else if (key.SequenceEqual("Unevictable"u8))
+                unevictable = Kilobytes(value);
+            else if (key.SequenceEqual("SwapTotal"u8))
+                swapTotal = Kilobytes(value);
+            else if (key.SequenceEqual("SwapFree"u8))
+                swapFree = Kilobytes(value);
         }
 
         // MemAvailable is the kernel's own estimate of what a new allocation could
@@ -237,7 +262,8 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
             cached + buffers,
             slab + kernelStack + pageTables + unevictable,
             swapTotal,
-            swapTotal >= swapFree ? swapTotal - swapFree : 0);
+            swapTotal >= swapFree ? swapTotal - swapFree : 0
+        );
 
         static ulong Kilobytes(ReadOnlySpan<byte> value)
         {
@@ -320,8 +346,8 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
         foreach (var line in ProcReader.Lines(buffer.AsSpan(0, length)))
         {
             var rest = line;
-            ProcReader.NextField(ref rest);                       // major
-            ProcReader.NextField(ref rest);                       // minor
+            ProcReader.NextField(ref rest); // major
+            ProcReader.NextField(ref rest); // minor
             var name = ProcReader.NextField(ref rest);
 
             if (!IsWholePhysicalDevice(name))
@@ -329,13 +355,13 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
                 continue;
             }
 
-            ProcReader.NextField(ref rest);                       // reads completed
-            ProcReader.NextField(ref rest);                       // reads merged
-            sectors += ProcReader.ParseUInt64(ProcReader.NextField(ref rest));   // sectors read
-            ProcReader.NextField(ref rest);                       // ms reading
-            ProcReader.NextField(ref rest);                       // writes completed
-            ProcReader.NextField(ref rest);                       // writes merged
-            sectors += ProcReader.ParseUInt64(ProcReader.NextField(ref rest));   // sectors written
+            ProcReader.NextField(ref rest); // reads completed
+            ProcReader.NextField(ref rest); // reads merged
+            sectors += ProcReader.ParseUInt64(ProcReader.NextField(ref rest)); // sectors read
+            ProcReader.NextField(ref rest); // ms reading
+            ProcReader.NextField(ref rest); // writes completed
+            ProcReader.NextField(ref rest); // writes merged
+            sectors += ProcReader.ParseUInt64(ProcReader.NextField(ref rest)); // sectors written
         }
 
         return sectors * SectorSize;
@@ -343,9 +369,13 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
 
     private static bool IsWholePhysicalDevice(ReadOnlySpan<byte> name)
     {
-        if (name.StartsWith("loop"u8) || name.StartsWith("ram"u8) ||
-            name.StartsWith("zram"u8) || name.StartsWith("dm-"u8) ||
-            name.StartsWith("md"u8))
+        if (
+            name.StartsWith("loop"u8)
+            || name.StartsWith("ram"u8)
+            || name.StartsWith("zram"u8)
+            || name.StartsWith("dm-"u8)
+            || name.StartsWith("md"u8)
+        )
         {
             return false;
         }
@@ -399,14 +429,14 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
             }
 
             var rest = line[(colon + 1)..];
-            total += ProcReader.ParseUInt64(ProcReader.NextField(ref rest));   // receive bytes
+            total += ProcReader.ParseUInt64(ProcReader.NextField(ref rest)); // receive bytes
 
             for (var i = 0; i < 7; i++)
             {
                 ProcReader.NextField(ref rest);
             }
 
-            total += ProcReader.ParseUInt64(ProcReader.NextField(ref rest));   // transmit bytes
+            total += ProcReader.ParseUInt64(ProcReader.NextField(ref rest)); // transmit bytes
         }
 
         return total;

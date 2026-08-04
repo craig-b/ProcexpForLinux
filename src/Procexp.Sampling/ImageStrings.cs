@@ -27,7 +27,13 @@ internal static class ImageStrings
         FileStream stream;
         try
         {
-            stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 65536);
+            stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite,
+                65536
+            );
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

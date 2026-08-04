@@ -13,7 +13,8 @@ namespace Procexp.App.Controls;
 /// the main things the lower pane is for, and those events are invisible without
 /// this.
 /// </remarks>
-public sealed class RowChangeTracker<TKey> where TKey : notnull
+public sealed class RowChangeTracker<TKey>
+    where TKey : notnull
 {
     private readonly Dictionary<TKey, DateTimeOffset> _appeared = [];
     private readonly Dictionary<TKey, DateTimeOffset> _departed = [];
@@ -78,12 +79,22 @@ public sealed class RowChangeTracker<TKey> where TKey : notnull
     {
         var before = _appeared.Count + _departed.Count;
 
-        foreach (var key in _appeared.Where(e => now - e.Value > HighlightDuration).Select(e => e.Key).ToList())
+        foreach (
+            var key in _appeared
+                .Where(e => now - e.Value > HighlightDuration)
+                .Select(e => e.Key)
+                .ToList()
+        )
         {
             _appeared.Remove(key);
         }
 
-        foreach (var key in _departed.Where(e => now - e.Value > HighlightDuration).Select(e => e.Key).ToList())
+        foreach (
+            var key in _departed
+                .Where(e => now - e.Value > HighlightDuration)
+                .Select(e => e.Key)
+                .ToList()
+        )
         {
             _departed.Remove(key);
         }

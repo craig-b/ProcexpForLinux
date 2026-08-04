@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>procexp-helper</AssemblyName>
-    <RootNamespace>Procexp.Helper</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
-    <ProjectReference Include="../Procexp.Sampling/Procexp.Sampling.csproj" />
-    <ProjectReference Include="../Procexp.Privileged/Procexp.Privileged.csproj" />
-  </ItemGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>procexp-helper</AssemblyName>
+        <RootNamespace>Procexp.Helper</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
+        <ProjectReference Include="../Procexp.Sampling/Procexp.Sampling.csproj" />
+        <ProjectReference Include="../Procexp.Privileged/Procexp.Privileged.csproj" />
+    </ItemGroup>
 </Project>

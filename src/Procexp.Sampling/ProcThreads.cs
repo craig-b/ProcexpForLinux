@@ -46,8 +46,10 @@ internal static class ProcThreads
                     continue;
                 }
 
-                if (!ProcFile.TryRead($"{entry}/stat", ref buffer, out var length) ||
-                    !ProcStat.TryParse(buffer.AsSpan(0, length), out var stat))
+                if (
+                    !ProcFile.TryRead($"{entry}/stat", ref buffer, out var length)
+                    || !ProcStat.TryParse(buffer.AsSpan(0, length), out var stat)
+                )
                 {
                     // Thread exited mid-enumeration.
                     continue;
@@ -67,24 +69,26 @@ internal static class ProcThreads
                 var userNanos = stat.UserTimeTicks * NativeMethods.NanosPerTick;
                 var systemNanos = stat.SystemTimeTicks * NativeMethods.NanosPerTick;
 
-                result.Add(new ThreadInfo
-                {
-                    Tid = tid,
-                    Name = stat.Comm,
-                    CpuTime = userNanos + systemNanos,
-                    UserTime = userNanos,
-                    KernelTime = systemNanos,
-                    State = ValueFormat.ProcessState(stat.State),
-                    StateChar = stat.State,
-                    WaitChannel = wchan,
-                    Priority = stat.Priority,
-                    Nice = stat.Nice,
-                    RealtimePriority = stat.RealtimePriority,
-                    SchedulingPolicy = stat.Policy,
-                    LastCpu = stat.Processor,
-                    MinorFaults = stat.MinorFaults,
-                    MajorFaults = stat.MajorFaults,
-                });
+                result.Add(
+                    new ThreadInfo
+                    {
+                        Tid = tid,
+                        Name = stat.Comm,
+                        CpuTime = userNanos + systemNanos,
+                        UserTime = userNanos,
+                        KernelTime = systemNanos,
+                        State = ValueFormat.ProcessState(stat.State),
+                        StateChar = stat.State,
+                        WaitChannel = wchan,
+                        Priority = stat.Priority,
+                        Nice = stat.Nice,
+                        RealtimePriority = stat.RealtimePriority,
+                        SchedulingPolicy = stat.Policy,
+                        LastCpu = stat.Processor,
+                        MinorFaults = stat.MinorFaults,
+                        MajorFaults = stat.MajorFaults,
+                    }
+                );
             }
         }
         finally

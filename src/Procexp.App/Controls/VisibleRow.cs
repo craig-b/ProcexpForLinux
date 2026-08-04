@@ -16,7 +16,8 @@ public readonly record struct VisibleRow(
     ProcessRecord Process,
     int Depth,
     bool HasChildren,
-    bool IsExpanded);
+    bool IsExpanded
+);
 
 /// <summary>
 /// Flattens a snapshot's tree into the visible row list, honouring collapse
@@ -29,7 +30,8 @@ public static class RowFlattener
         HashSet<ProcessId> collapsed,
         Column sortColumn,
         bool descending,
-        bool treeMode)
+        bool treeMode
+    )
     {
         var rows = new List<VisibleRow>(snapshot.Processes.Count);
 
@@ -47,8 +49,8 @@ public static class RowFlattener
             return rows;
         }
 
-        var roots = snapshot.Roots
-            .Select(id => snapshot.Processes.GetValueOrDefault(id))
+        var roots = snapshot
+            .Roots.Select(id => snapshot.Processes.GetValueOrDefault(id))
             .Where(p => p is not null)
             .Select(p => p!)
             .ToList();
@@ -100,15 +102,17 @@ public static class RowFlattener
     /// </remarks>
     private static void Sort(List<ProcessRecord> processes, Column column, bool descending)
     {
-        processes.Sort((a, b) =>
-        {
-            var result = Columns.SortValue(column, a).CompareTo(Columns.SortValue(column, b));
-            if (result == 0)
+        processes.Sort(
+            (a, b) =>
             {
-                return a.Id.Pid.CompareTo(b.Id.Pid);
-            }
+                var result = Columns.SortValue(column, a).CompareTo(Columns.SortValue(column, b));
+                if (result == 0)
+                {
+                    return a.Id.Pid.CompareTo(b.Id.Pid);
+                }
 
-            return descending ? -result : result;
-        });
+                return descending ? -result : result;
+            }
+        );
     }
 }

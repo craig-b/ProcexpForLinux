@@ -56,7 +56,11 @@ public sealed class ProcessPropertiesWindow : Window
     private bool _stringsLoaded;
     private bool _provenanceLoaded;
 
-    public ProcessPropertiesWindow(IProcessDataProvider provider, ProcessRecord record, bool darkMode)
+    public ProcessPropertiesWindow(
+        IProcessDataProvider provider,
+        ProcessRecord record,
+        bool darkMode
+    )
     {
         _provider = provider;
         _record = record;
@@ -151,42 +155,84 @@ public sealed class ProcessPropertiesWindow : Window
     {
         _threads.EmptyMessage = "No threads.";
         _threads.IdentityOf = t => ((ThreadInfo)t).Tid;
-        _threads.SetColumns(
-        [
-            new("TID", 90, t => t.Tid.ToString(CultureInfo.InvariantCulture), true, t => SortKey.Number(t.Tid)),
+        _threads.SetColumns([
+            new(
+                "TID",
+                90,
+                t => t.Tid.ToString(CultureInfo.InvariantCulture),
+                true,
+                t => SortKey.Number(t.Tid)
+            ),
             new("Name", 150, t => t.Name),
             new("State", 110, t => t.State),
-            new("CPU Time", 100, t => ValueFormat.Duration(t.CpuTime), true, t => SortKey.Number(t.CpuTime)),
-            new("User Time", 100, t => ValueFormat.Duration(t.UserTime), true, t => SortKey.Number(t.UserTime)),
-            new("Kernel Time", 100, t => ValueFormat.Duration(t.KernelTime), true, t => SortKey.Number(t.KernelTime)),
+            new(
+                "CPU Time",
+                100,
+                t => ValueFormat.Duration(t.CpuTime),
+                true,
+                t => SortKey.Number(t.CpuTime)
+            ),
+            new(
+                "User Time",
+                100,
+                t => ValueFormat.Duration(t.UserTime),
+                true,
+                t => SortKey.Number(t.UserTime)
+            ),
+            new(
+                "Kernel Time",
+                100,
+                t => ValueFormat.Duration(t.KernelTime),
+                true,
+                t => SortKey.Number(t.KernelTime)
+            ),
             new("Wait Reason", 160, t => t.WaitChannel ?? ""),
-            new("Priority", 76, t => t.Priority.ToString(CultureInfo.InvariantCulture), true, t => SortKey.Number(t.Priority)),
+            new(
+                "Priority",
+                76,
+                t => t.Priority.ToString(CultureInfo.InvariantCulture),
+                true,
+                t => SortKey.Number(t.Priority)
+            ),
         ]);
 
         _sockets.EmptyMessage = "No sockets open.";
         _sockets.IdentityOf = s => ((SocketInfo)s).Fd;
-        _sockets.SetColumns(
-        [
+        _sockets.SetColumns([
             new("Protocol", 80, s => s.Protocol.ToString()),
             new("Local Address", 190, s => Endpoint(s.LocalAddress, s.LocalPort)),
-            new("Remote Address", 190, s => s.RemoteHostName ?? Endpoint(s.RemoteAddress, s.RemotePort)),
+            new(
+                "Remote Address",
+                190,
+                s => s.RemoteHostName ?? Endpoint(s.RemoteAddress, s.RemotePort)
+            ),
             new("State", 120, s => s.State),
-            new("FD", 56, s => s.Fd.ToString(CultureInfo.InvariantCulture), true, s => SortKey.Number(s.Fd)),
+            new(
+                "FD",
+                56,
+                s => s.Fd.ToString(CultureInfo.InvariantCulture),
+                true,
+                s => SortKey.Number(s.Fd)
+            ),
         ]);
 
         _environment.EmptyMessage = "Environment not readable for this process.";
         _environment.IdentityOf = e => ((EnvironmentEntry)e).Key;
-        _environment.SetColumns(
-        [
+        _environment.SetColumns([
             new("Variable", 240, e => e.Key),
             new("Value", 900, e => e.Value),
         ]);
 
         _strings.EmptyMessage = "No printable strings found.";
         _strings.IdentityOf = s => ((StringEntry)s).Index;
-        _strings.SetColumns(
-        [
-            new("#", 70, s => s.Index.ToString(CultureInfo.InvariantCulture), true, s => SortKey.Number(s.Index)),
+        _strings.SetColumns([
+            new(
+                "#",
+                70,
+                s => s.Index.ToString(CultureInfo.InvariantCulture),
+                true,
+                s => SortKey.Number(s.Index)
+            ),
             new("String", 1100, s => s.Value),
         ]);
 
@@ -208,10 +254,13 @@ public sealed class ProcessPropertiesWindow : Window
         _image.Add(
             "Path",
             _record.ExecutablePath
-                ?? (_record.Flags.HasFlag(ProcessFlags.KernelThread)
-                    ? "(kernel thread — no image)"
-                    : "(not readable — owned by another user)"),
-            showWhenEmpty: true);
+                ?? (
+                    _record.Flags.HasFlag(ProcessFlags.KernelThread)
+                        ? "(kernel thread — no image)"
+                        : "(not readable — owned by another user)"
+                ),
+            showWhenEmpty: true
+        );
         _image.Add("Command line", _record.CommandLine);
         _image.Add("Kind", _record.ImageKind.ToString());
         _image.Add("Description", _record.Description);
@@ -220,7 +269,10 @@ public sealed class ProcessPropertiesWindow : Window
 
         _image.AddSection("Process");
         _image.Add("PID", _record.Id.Pid.ToString(CultureInfo.InvariantCulture));
-        _image.Add("Parent", _record.Parent is { } p ? p.Pid.ToString(CultureInfo.InvariantCulture) : "(none)");
+        _image.Add(
+            "Parent",
+            _record.Parent is { } p ? p.Pid.ToString(CultureInfo.InvariantCulture) : "(none)"
+        );
         _image.Add("Started", ValueFormat.DateTime(_record.StartTime));
         _image.Add("User", _record.UserName ?? _record.Uid.ToString(CultureInfo.InvariantCulture));
         _image.Add("Session", _record.SessionTty);
@@ -238,7 +290,10 @@ public sealed class ProcessPropertiesWindow : Window
         _performance.Clear();
 
         _performance.AddSection("CPU");
-        _performance.Add("Usage", string.Create(CultureInfo.InvariantCulture, $"{_record.CpuPercent:F2}%"));
+        _performance.Add(
+            "Usage",
+            string.Create(CultureInfo.InvariantCulture, $"{_record.CpuPercent:F2}%")
+        );
         _performance.Add("Total time", ValueFormat.Duration(_record.CpuTime));
         _performance.Add("User time", ValueFormat.Duration(_record.UserTime));
         _performance.Add("Kernel time", ValueFormat.Duration(_record.SystemTime));
@@ -247,7 +302,10 @@ public sealed class ProcessPropertiesWindow : Window
         _performance.Add("Nice", _record.Nice.ToString(CultureInfo.InvariantCulture));
         _performance.Add("Policy", ValueFormat.SchedulingPolicy(_record.SchedulingPolicy));
         _performance.Add("Context switches", ValueFormat.Integer(_record.VoluntaryContextSwitches));
-        _performance.Add("Involuntary switches", ValueFormat.Integer(_record.InvoluntaryContextSwitches));
+        _performance.Add(
+            "Involuntary switches",
+            ValueFormat.Integer(_record.InvoluntaryContextSwitches)
+        );
 
         _performance.AddSection("Memory");
         _performance.Add("Working set", ValueFormat.Bytes(_record.ResidentSize));
@@ -258,7 +316,8 @@ public sealed class ProcessPropertiesWindow : Window
         _performance.Add(
             "Private bytes (PSS)",
             _record.ProportionalSetSize is { } pss ? ValueFormat.Bytes(pss) : "(not available)",
-            showWhenEmpty: true);
+            showWhenEmpty: true
+        );
 
         _performance.Add("Shared", ValueFormat.Bytes(_record.SharedSize));
         _performance.Add("Swap", ValueFormat.Bytes(_record.SwapSize));
@@ -269,11 +328,15 @@ public sealed class ProcessPropertiesWindow : Window
         _performance.Add(
             "Read",
             _record.DiskBytesRead is { } read ? ValueFormat.Bytes(read) : "(not available)",
-            showWhenEmpty: true);
+            showWhenEmpty: true
+        );
         _performance.Add(
             "Written",
-            _record.DiskBytesWritten is { } written ? ValueFormat.Bytes(written) : "(not available)",
-            showWhenEmpty: true);
+            _record.DiskBytesWritten is { } written
+                ? ValueFormat.Bytes(written)
+                : "(not available)",
+            showWhenEmpty: true
+        );
         _performance.Add("Open descriptors", ValueFormat.Integer(_record.FileDescriptorCount));
 
         _performance.AddSection("Kernel");
@@ -348,25 +411,34 @@ public sealed class ProcessPropertiesWindow : Window
             switch (header)
             {
                 case "Threads":
-                    _threads.SetRows(await _provider.ThreadsAsync(_id, _lifetime.Token).ConfigureAwait(true));
+                    _threads.SetRows(
+                        await _provider.ThreadsAsync(_id, _lifetime.Token).ConfigureAwait(true)
+                    );
                     break;
 
                 case "TCP/IP":
-                    _sockets.SetRows(await _network.SocketsAsync(_id, _lifetime.Token).ConfigureAwait(true));
+                    _sockets.SetRows(
+                        await _network.SocketsAsync(_id, _lifetime.Token).ConfigureAwait(true)
+                    );
                     _ = ResolveHostNamesAsync();
                     break;
 
                 case "Environment":
-                    var environment = await _provider.EnvironmentAsync(_id, _lifetime.Token).ConfigureAwait(true);
-                    _environment.SetRows(
-                        [.. environment
+                    var environment = await _provider
+                        .EnvironmentAsync(_id, _lifetime.Token)
+                        .ConfigureAwait(true);
+                    _environment.SetRows([
+                        .. environment
                             .OrderBy(e => e.Key, StringComparer.Ordinal)
-                            .Select(e => new EnvironmentEntry(e.Key, e.Value))]);
+                            .Select(e => new EnvironmentEntry(e.Key, e.Value)),
+                    ]);
                     break;
 
                 case "Strings" when !_stringsLoaded:
                     _stringsLoaded = true;
-                    var strings = await _provider.StringsAsync(_id, _lifetime.Token).ConfigureAwait(true);
+                    var strings = await _provider
+                        .StringsAsync(_id, _lifetime.Token)
+                        .ConfigureAwait(true);
                     _strings.SetRows([.. strings.Select((s, i) => new StringEntry(i, s))]);
                     break;
 
@@ -388,9 +460,10 @@ public sealed class ProcessPropertiesWindow : Window
 
     private void ReportTabFailure(string? header, ProviderException e)
     {
-        var message = e.Kind == ProviderErrorKind.NotPermitted
-            ? "Not permitted — readable only by the process owner. Installing the privileged helper would allow this."
-            : e.Message;
+        var message =
+            e.Kind == ProviderErrorKind.NotPermitted
+                ? "Not permitted — readable only by the process owner. Installing the privileged helper would allow this."
+                : e.Message;
 
         switch (header)
         {
@@ -429,12 +502,18 @@ public sealed class ProcessPropertiesWindow : Window
                 continue;
             }
 
-            var name = await _network.ResolveHostNameAsync(socket.RemoteAddress, _lifetime.Token)
+            var name = await _network
+                .ResolveHostNameAsync(socket.RemoteAddress, _lifetime.Token)
                 .ConfigureAwait(true);
 
-            resolved.Add(name == socket.RemoteAddress
-                ? socket
-                : socket with { RemoteHostName = $"{name}:{socket.RemotePort}" });
+            resolved.Add(
+                name == socket.RemoteAddress
+                    ? socket
+                    : socket with
+                    {
+                        RemoteHostName = $"{name}:{socket.RemotePort}",
+                    }
+            );
         }
 
         if (!_lifetime.IsCancellationRequested)
@@ -450,14 +529,20 @@ public sealed class ProcessPropertiesWindow : Window
         if (_record.ExecutablePath is not { Length: > 0 } path)
         {
             _provenanceDetail.AddSection("Provenance");
-            _provenanceDetail.Add("Status", "No image on disk (kernel thread).", showWhenEmpty: true);
+            _provenanceDetail.Add(
+                "Status",
+                "No image on disk (kernel thread).",
+                showWhenEmpty: true
+            );
             return;
         }
 
         _provenanceDetail.AddSection("Provenance");
         _provenanceDetail.Add("Status", "Checking...", showWhenEmpty: true);
 
-        var info = await _provenance.DeepProvenanceAsync(path, _lifetime.Token).ConfigureAwait(true);
+        var info = await _provenance
+            .DeepProvenanceAsync(path, _lifetime.Token)
+            .ConfigureAwait(true);
 
         _provenanceDetail.Clear();
         _provenanceDetail.AddSection("Package");
@@ -488,13 +573,18 @@ public sealed class ProcessPropertiesWindow : Window
         }
     }
 
-    private static string DescribeStatus(ProvenanceStatus status) => status switch
-    {
-        ProvenanceStatus.PackageVerified => "Shipped by the distribution, and unmodified on disk.",
-        ProvenanceStatus.PackageModified => "Owned by a package, but the file on disk no longer matches it.",
-        ProvenanceStatus.Unpackaged => "Not owned by any package — built locally, downloaded, or installed by hand.",
-        ProvenanceStatus.SandboxedBundle => "Shipped inside a Flatpak or Snap, which carries its own signing.",
-        ProvenanceStatus.Unknown => "Could not be determined.",
-        _ => status.ToString(),
-    };
+    private static string DescribeStatus(ProvenanceStatus status) =>
+        status switch
+        {
+            ProvenanceStatus.PackageVerified =>
+                "Shipped by the distribution, and unmodified on disk.",
+            ProvenanceStatus.PackageModified =>
+                "Owned by a package, but the file on disk no longer matches it.",
+            ProvenanceStatus.Unpackaged =>
+                "Not owned by any package — built locally, downloaded, or installed by hand.",
+            ProvenanceStatus.SandboxedBundle =>
+                "Shipped inside a Flatpak or Snap, which carries its own signing.",
+            ProvenanceStatus.Unknown => "Could not be determined.",
+            _ => status.ToString(),
+        };
 }

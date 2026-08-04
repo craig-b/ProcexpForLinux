@@ -37,7 +37,9 @@ public abstract class VirtualTableBase : Control
 
         TextCache = new FormattedTextCache(new Typeface(FontFamily.Default), 12);
         HeaderTextCache = new FormattedTextCache(
-            new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold), 12);
+            new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold),
+            12
+        );
 
         // Selection is drawn differently when the pane is not focused, so both
         // transitions have to repaint.
@@ -128,7 +130,10 @@ public abstract class VirtualTableBase : Control
         if (RowCount > 0)
         {
             var first = Math.Max(0, (int)(_verticalOffset / RowHeight));
-            var last = Math.Min(RowCount - 1, (int)((_verticalOffset + ViewportHeight) / RowHeight) + 1);
+            var last = Math.Min(
+                RowCount - 1,
+                (int)((_verticalOffset + ViewportHeight) / RowHeight) + 1
+            );
             LastRenderedRowCount = Math.Max(0, last - first + 1);
 
             RenderCore(context, first, last);
@@ -150,16 +155,19 @@ public abstract class VirtualTableBase : Control
     protected abstract void RenderCore(DrawingContext context, int firstRow, int lastRow);
 
     /// <summary>Draw whatever should appear when there is nothing to show.</summary>
-    protected virtual void RenderEmpty(DrawingContext context)
-    {
-    }
+    protected virtual void RenderEmpty(DrawingContext context) { }
 
     /// <summary>Y coordinate of a row, accounting for the header and scroll.</summary>
     protected double RowTop(int index) => HeaderHeight + (index * RowHeight) - _verticalOffset;
 
     /// <summary>Draw one cell of text, vertically centred and trimmed to fit.</summary>
     protected void DrawCell(
-        DrawingContext context, string text, Rect rect, bool rightAligned, bool selected)
+        DrawingContext context,
+        string text,
+        Rect rect,
+        bool rightAligned,
+        bool selected
+    )
     {
         if (rect.Width <= 1 || text.Length == 0)
         {
@@ -167,13 +175,23 @@ public abstract class VirtualTableBase : Control
         }
 
         var formatted = TextCache.Get(
-            text, rect.Width, selected ? Palette.SelectedText : Palette.Text, emphasised: false, selected);
+            text,
+            rect.Width,
+            selected ? Palette.SelectedText : Palette.Text,
+            emphasised: false,
+            selected
+        );
 
         var x = rightAligned ? rect.Right - Math.Min(formatted.Width, rect.Width) : rect.X;
         context.DrawText(formatted, new Point(x, rect.Y + ((RowHeight - formatted.Height) / 2)));
     }
 
-    protected void DrawHeaderCell(DrawingContext context, string label, Rect rect, bool rightAligned)
+    protected void DrawHeaderCell(
+        DrawingContext context,
+        string label,
+        Rect rect,
+        bool rightAligned
+    )
     {
         if (rect.Width <= 1 || label.Length == 0)
         {
@@ -181,14 +199,24 @@ public abstract class VirtualTableBase : Control
         }
 
         var formatted = HeaderTextCache.Get(
-            label, rect.Width, Palette.HeaderText, emphasised: true, selected: false);
+            label,
+            rect.Width,
+            Palette.HeaderText,
+            emphasised: true,
+            selected: false
+        );
 
         var x = rightAligned ? rect.Right - Math.Min(formatted.Width, rect.Width) : rect.X;
         context.DrawText(formatted, new Point(x, (HeaderHeight - formatted.Height) / 2));
     }
 
     /// <summary>Fill a row background: selection, rule colour, or banding.</summary>
-    protected void DrawRowBackground(DrawingContext context, Rect rect, int index, IBrush? ruleBrush)
+    protected void DrawRowBackground(
+        DrawingContext context,
+        Rect rect,
+        int index,
+        IBrush? ruleBrush
+    )
     {
         if (index == _selectedIndex)
         {

@@ -133,8 +133,16 @@ public class RowChangeTrackerTests
         tracker.Observe(["a", "b"], T0);
         tracker.Observe(["a", "c"], T0);
 
-        var newColour = ProcessColorRule.Background(ProcessFlags.NewProcess, rules, darkMode: false);
-        var deadColour = ProcessColorRule.Background(ProcessFlags.DeadProcess, rules, darkMode: false);
+        var newColour = ProcessColorRule.Background(
+            ProcessFlags.NewProcess,
+            rules,
+            darkMode: false
+        );
+        var deadColour = ProcessColorRule.Background(
+            ProcessFlags.DeadProcess,
+            rules,
+            darkMode: false
+        );
 
         Assert.Equal(newColour, tracker.Colour("c", rules, darkMode: false));
         Assert.Equal(deadColour, tracker.Colour("b", rules, darkMode: false));

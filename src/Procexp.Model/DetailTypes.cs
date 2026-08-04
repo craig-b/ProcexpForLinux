@@ -1,7 +1,8 @@
 namespace Procexp.Model;
 
 /// <summary>Shared shape for the lower-pane column enums.</summary>
-public interface ILowerPaneColumn<TSelf> where TSelf : struct, Enum
+public interface ILowerPaneColumn<TSelf>
+    where TSelf : struct, Enum
 {
     static abstract string Title(TSelf column);
     static abstract double DefaultWidth(TSelf column);
@@ -90,44 +91,53 @@ public enum ThreadColumn
 
 public static class ThreadColumns
 {
-    public static string Title(ThreadColumn c) => c switch
-    {
-        ThreadColumn.State => "State",
-        ThreadColumn.Tid => "TID",
-        ThreadColumn.Name => "Name",
-        ThreadColumn.UserTime => "User Time",
-        ThreadColumn.KernelTime => "Kernel Time",
-        ThreadColumn.Cpu => "CPU",
-        ThreadColumn.CpuTime => "CPU Time",
-        ThreadColumn.StartAddress => "Start Address",
-        ThreadColumn.WaitChannel => "Wait Reason",
-        ThreadColumn.Priority => "Priority",
-        ThreadColumn.Nice => "Nice",
-        ThreadColumn.RealtimePriority => "RT Pri",
-        ThreadColumn.Policy => "Policy",
-        ThreadColumn.LastCpu => "CPU #",
-        _ => "",
-    };
+    public static string Title(ThreadColumn c) =>
+        c switch
+        {
+            ThreadColumn.State => "State",
+            ThreadColumn.Tid => "TID",
+            ThreadColumn.Name => "Name",
+            ThreadColumn.UserTime => "User Time",
+            ThreadColumn.KernelTime => "Kernel Time",
+            ThreadColumn.Cpu => "CPU",
+            ThreadColumn.CpuTime => "CPU Time",
+            ThreadColumn.StartAddress => "Start Address",
+            ThreadColumn.WaitChannel => "Wait Reason",
+            ThreadColumn.Priority => "Priority",
+            ThreadColumn.Nice => "Nice",
+            ThreadColumn.RealtimePriority => "RT Pri",
+            ThreadColumn.Policy => "Policy",
+            ThreadColumn.LastCpu => "CPU #",
+            _ => "",
+        };
 
-    public static double DefaultWidth(ThreadColumn c) => c switch
-    {
-        ThreadColumn.State => 110,
-        ThreadColumn.Tid => 92,
-        ThreadColumn.Name => 150,
-        ThreadColumn.UserTime or ThreadColumn.KernelTime or ThreadColumn.CpuTime => 100,
-        ThreadColumn.Cpu => 70,
-        ThreadColumn.StartAddress => 130,
-        ThreadColumn.WaitChannel => 160,
-        ThreadColumn.Priority or ThreadColumn.Nice or ThreadColumn.RealtimePriority => 76,
-        ThreadColumn.Policy => 94,
-        ThreadColumn.LastCpu => 62,
-        _ => 90,
-    };
+    public static double DefaultWidth(ThreadColumn c) =>
+        c switch
+        {
+            ThreadColumn.State => 110,
+            ThreadColumn.Tid => 92,
+            ThreadColumn.Name => 150,
+            ThreadColumn.UserTime or ThreadColumn.KernelTime or ThreadColumn.CpuTime => 100,
+            ThreadColumn.Cpu => 70,
+            ThreadColumn.StartAddress => 130,
+            ThreadColumn.WaitChannel => 160,
+            ThreadColumn.Priority or ThreadColumn.Nice or ThreadColumn.RealtimePriority => 76,
+            ThreadColumn.Policy => 94,
+            ThreadColumn.LastCpu => 62,
+            _ => 90,
+        };
 
-    public static bool IsRightAligned(ThreadColumn c) => c is
-        ThreadColumn.Tid or ThreadColumn.UserTime or ThreadColumn.KernelTime or
-        ThreadColumn.Cpu or ThreadColumn.CpuTime or ThreadColumn.Priority or
-        ThreadColumn.Nice or ThreadColumn.RealtimePriority or ThreadColumn.LastCpu;
+    public static bool IsRightAligned(ThreadColumn c) =>
+        c
+            is ThreadColumn.Tid
+                or ThreadColumn.UserTime
+                or ThreadColumn.KernelTime
+                or ThreadColumn.Cpu
+                or ThreadColumn.CpuTime
+                or ThreadColumn.Priority
+                or ThreadColumn.Nice
+                or ThreadColumn.RealtimePriority
+                or ThreadColumn.LastCpu;
 
     /// <summary>
     /// Mirrors Process Explorer's thread-view defaults. Wait Reason is included
@@ -135,9 +145,15 @@ public static class ThreadColumns
     /// </summary>
     public static readonly IReadOnlyList<ThreadColumn> Default =
     [
-        ThreadColumn.State, ThreadColumn.Tid, ThreadColumn.UserTime,
-        ThreadColumn.KernelTime, ThreadColumn.Cpu, ThreadColumn.CpuTime,
-        ThreadColumn.StartAddress, ThreadColumn.WaitChannel, ThreadColumn.Priority,
+        ThreadColumn.State,
+        ThreadColumn.Tid,
+        ThreadColumn.UserTime,
+        ThreadColumn.KernelTime,
+        ThreadColumn.Cpu,
+        ThreadColumn.CpuTime,
+        ThreadColumn.StartAddress,
+        ThreadColumn.WaitChannel,
+        ThreadColumn.Priority,
     ];
 
     public static readonly IReadOnlyList<ThreadColumn> Required = [ThreadColumn.Tid];
@@ -192,39 +208,46 @@ public enum ModuleColumn
 
 public static class ModuleColumns
 {
-    public static string Title(ModuleColumn c) => c switch
-    {
-        ModuleColumn.Name => "Name",
-        ModuleColumn.Description => "Description",
-        ModuleColumn.Company => "Company",
-        ModuleColumn.Version => "Version",
-        ModuleColumn.Path => "Path",
-        ModuleColumn.Provenance => "Package",
-        ModuleColumn.Base => "Base",
-        ModuleColumn.Size => "Size",
-        ModuleColumn.Permissions => "Perms",
-        _ => "",
-    };
+    public static string Title(ModuleColumn c) =>
+        c switch
+        {
+            ModuleColumn.Name => "Name",
+            ModuleColumn.Description => "Description",
+            ModuleColumn.Company => "Company",
+            ModuleColumn.Version => "Version",
+            ModuleColumn.Path => "Path",
+            ModuleColumn.Provenance => "Package",
+            ModuleColumn.Base => "Base",
+            ModuleColumn.Size => "Size",
+            ModuleColumn.Permissions => "Perms",
+            _ => "",
+        };
 
-    public static double DefaultWidth(ModuleColumn c) => c switch
-    {
-        ModuleColumn.Name => 200,
-        ModuleColumn.Description => 200,
-        ModuleColumn.Company => 150,
-        ModuleColumn.Version => 90,
-        ModuleColumn.Path => 320,
-        ModuleColumn.Provenance => 180,
-        ModuleColumn.Base => 130,
-        ModuleColumn.Size => 80,
-        ModuleColumn.Permissions => 62,
-        _ => 100,
-    };
+    public static double DefaultWidth(ModuleColumn c) =>
+        c switch
+        {
+            ModuleColumn.Name => 200,
+            ModuleColumn.Description => 200,
+            ModuleColumn.Company => 150,
+            ModuleColumn.Version => 90,
+            ModuleColumn.Path => 320,
+            ModuleColumn.Provenance => 180,
+            ModuleColumn.Base => 130,
+            ModuleColumn.Size => 80,
+            ModuleColumn.Permissions => 62,
+            _ => 100,
+        };
 
     public static bool IsRightAligned(ModuleColumn c) =>
         c is ModuleColumn.Base or ModuleColumn.Size;
 
     public static readonly IReadOnlyList<ModuleColumn> Default =
-        [ModuleColumn.Name, ModuleColumn.Description, ModuleColumn.Company, ModuleColumn.Path];
+    [
+        ModuleColumn.Name,
+        ModuleColumn.Description,
+        ModuleColumn.Company,
+        ModuleColumn.Path,
+    ];
 
     public static readonly IReadOnlyList<ModuleColumn> Required = [ModuleColumn.Name];
 }
@@ -302,47 +325,61 @@ public enum HandleColumn
 
 public static class HandleColumns
 {
-    public static string Title(HandleColumn c) => c switch
-    {
-        HandleColumn.Kind => "Type",
-        HandleColumn.Name => "Name",
-        HandleColumn.Fd => "FD",
-        HandleColumn.Access => "Access",
-        HandleColumn.Offset => "Offset",
-        HandleColumn.Size => "Size",
-        HandleColumn.Inode => "Inode",
-        HandleColumn.Device => "Device",
-        HandleColumn.SocketFamily => "Family",
-        HandleColumn.SocketProtocol => "Protocol",
-        HandleColumn.SocketState => "Socket State",
-        HandleColumn.SocketQueues => "Queues",
-        _ => "",
-    };
+    public static string Title(HandleColumn c) =>
+        c switch
+        {
+            HandleColumn.Kind => "Type",
+            HandleColumn.Name => "Name",
+            HandleColumn.Fd => "FD",
+            HandleColumn.Access => "Access",
+            HandleColumn.Offset => "Offset",
+            HandleColumn.Size => "Size",
+            HandleColumn.Inode => "Inode",
+            HandleColumn.Device => "Device",
+            HandleColumn.SocketFamily => "Family",
+            HandleColumn.SocketProtocol => "Protocol",
+            HandleColumn.SocketState => "Socket State",
+            HandleColumn.SocketQueues => "Queues",
+            _ => "",
+        };
 
-    public static double DefaultWidth(HandleColumn c) => c switch
-    {
-        HandleColumn.Kind => 100,
-        HandleColumn.Name => 440,
-        HandleColumn.Fd => 56,
-        HandleColumn.Access => 76,
-        HandleColumn.Offset or HandleColumn.Size => 86,
-        HandleColumn.Inode => 110,
-        HandleColumn.Device => 80,
-        HandleColumn.SocketFamily or HandleColumn.SocketProtocol => 86,
-        HandleColumn.SocketState => 110,
-        HandleColumn.SocketQueues => 90,
-        _ => 90,
-    };
+    public static double DefaultWidth(HandleColumn c) =>
+        c switch
+        {
+            HandleColumn.Kind => 100,
+            HandleColumn.Name => 440,
+            HandleColumn.Fd => 56,
+            HandleColumn.Access => 76,
+            HandleColumn.Offset or HandleColumn.Size => 86,
+            HandleColumn.Inode => 110,
+            HandleColumn.Device => 80,
+            HandleColumn.SocketFamily or HandleColumn.SocketProtocol => 86,
+            HandleColumn.SocketState => 110,
+            HandleColumn.SocketQueues => 90,
+            _ => 90,
+        };
 
-    public static bool IsRightAligned(HandleColumn c) => c is
-        HandleColumn.Fd or HandleColumn.Offset or HandleColumn.Size or
-        HandleColumn.Inode or HandleColumn.SocketQueues;
+    public static bool IsRightAligned(HandleColumn c) =>
+        c
+            is HandleColumn.Fd
+                or HandleColumn.Offset
+                or HandleColumn.Size
+                or HandleColumn.Inode
+                or HandleColumn.SocketQueues;
 
     public static readonly IReadOnlyList<HandleColumn> Default =
-        [HandleColumn.Kind, HandleColumn.Name, HandleColumn.Fd];
+    [
+        HandleColumn.Kind,
+        HandleColumn.Name,
+        HandleColumn.Fd,
+    ];
 
     public static readonly IReadOnlyList<HandleColumn> Required =
-        [HandleColumn.Kind, HandleColumn.Name, HandleColumn.Fd];
+    [
+        HandleColumn.Kind,
+        HandleColumn.Name,
+        HandleColumn.Fd,
+    ];
 }
 
 // ---------------------------------------------------------------------------

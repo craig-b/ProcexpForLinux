@@ -107,7 +107,9 @@ public sealed record HelperResponse
     public int Version { get; init; }
 
     public static HelperResponse Failure(string error) => new() { Ok = false, Error = error };
-    public static HelperResponse Success(string? content = null) => new() { Ok = true, Content = content };
+
+    public static HelperResponse Success(string? content = null) =>
+        new() { Ok = true, Content = content };
 }
 
 [JsonSerializable(typeof(HelperRequest))]

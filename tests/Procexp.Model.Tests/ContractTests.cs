@@ -9,7 +9,12 @@ namespace Procexp.Model.Tests;
 public class ContractTests
 {
     private static ProcessRecord Record(ProcessId id, string name, ProcessId? parent = null) =>
-        new() { Id = id, Name = name, Parent = parent };
+        new()
+        {
+            Id = id,
+            Name = name,
+            Parent = parent,
+        };
 
     [Fact]
     public void TreeBuilder_ComputesRootsAndChildren_PromotingOrphans()
@@ -42,17 +47,21 @@ public class ContractTests
         var id2 = new ProcessId(2, 20);
         var id3 = new ProcessId(3, 30);
 
-        var old = Snapshot(new Dictionary<ProcessId, ProcessRecord>
-        {
-            [id1] = Record(id1, "one") with { CpuPercent = 1 },
-            [id2] = Record(id2, "two"),
-        });
+        var old = Snapshot(
+            new Dictionary<ProcessId, ProcessRecord>
+            {
+                [id1] = Record(id1, "one") with { CpuPercent = 1 },
+                [id2] = Record(id2, "two"),
+            }
+        );
 
-        var @new = Snapshot(new Dictionary<ProcessId, ProcessRecord>
-        {
-            [id1] = Record(id1, "one") with { CpuPercent = 2 },
-            [id3] = Record(id3, "three"),
-        });
+        var @new = Snapshot(
+            new Dictionary<ProcessId, ProcessRecord>
+            {
+                [id1] = Record(id1, "one") with { CpuPercent = 2 },
+                [id3] = Record(id3, "three"),
+            }
+        );
 
         var diff = SnapshotDiff.Between(old, @new);
 
@@ -105,7 +114,10 @@ public class ContractTests
     public void Duration_FormatsAsHoursMinutesSecondsCentis()
     {
         Assert.Equal("0:00:02.00", ValueFormat.Duration(2_000_000_000));
-        Assert.Equal("1:01:01.50", ValueFormat.Duration((3600UL + 61) * 1_000_000_000 + 500_000_000));
+        Assert.Equal(
+            "1:01:01.50",
+            ValueFormat.Duration((3600UL + 61) * 1_000_000_000 + 500_000_000)
+        );
     }
 
     [Fact]
@@ -216,8 +228,12 @@ public class ContractTests
     {
         Assert.Equal(
             [ModuleColumn.Name, ModuleColumn.Description, ModuleColumn.Company, ModuleColumn.Path],
-            ModuleColumns.Default);
-        Assert.Equal([HandleColumn.Kind, HandleColumn.Name, HandleColumn.Fd], HandleColumns.Default);
+            ModuleColumns.Default
+        );
+        Assert.Equal(
+            [HandleColumn.Kind, HandleColumn.Name, HandleColumn.Fd],
+            HandleColumns.Default
+        );
         Assert.Equal([ModuleColumn.Name], ModuleColumns.Required);
         Assert.Equal([ThreadColumn.Tid], ThreadColumns.Required);
     }
@@ -249,15 +265,24 @@ public class ContractTests
         var background = ProcessColorRule.Background(
             ProcessFlags.OwnProcess | ProcessFlags.NewProcess,
             ProcessColorRule.Defaults,
-            darkMode: false);
+            darkMode: false
+        );
 
-        var expected = ProcessColorRule.Defaults.First(r => r.Flag == ProcessFlags.NewProcess).BackgroundLight;
+        var expected = ProcessColorRule
+            .Defaults.First(r => r.Flag == ProcessFlags.NewProcess)
+            .BackgroundLight;
         Assert.Equal(expected, background);
     }
 
     [Fact]
     public void NoMatchingRule_LeavesDefaultBackground() =>
-        Assert.Null(ProcessColorRule.Background(ProcessFlags.None, ProcessColorRule.Defaults, darkMode: false));
+        Assert.Null(
+            ProcessColorRule.Background(
+                ProcessFlags.None,
+                ProcessColorRule.Defaults,
+                darkMode: false
+            )
+        );
 
     [Fact]
     public void ProcessIdentity_SurvivesPidReuse()
@@ -286,7 +311,10 @@ public class ContractTests
         };
         Assert.Equal("coreutils (modified)", modified.DisplayName);
 
-        Assert.Equal("(unpackaged)", new ProvenanceInfo { Status = ProvenanceStatus.Unpackaged }.DisplayName);
+        Assert.Equal(
+            "(unpackaged)",
+            new ProvenanceInfo { Status = ProvenanceStatus.Unpackaged }.DisplayName
+        );
         Assert.Equal("", ProvenanceInfo.Unverified.DisplayName);
     }
 }

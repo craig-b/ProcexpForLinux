@@ -38,7 +38,8 @@ public sealed class ActionCoordinator(Window owner)
                 }
             },
             tree ? "Kill Process Tree" : "Kill Process",
-            process);
+            process
+        );
     }
 
     public async Task SuspendAsync(ProcessRecord process)
@@ -100,15 +101,17 @@ public sealed class ActionCoordinator(Window owner)
                 ProviderErrorKind.ProcessGone =>
                     $"{process.Name} (pid {process.Id.Pid}) has already exited.",
                 ProviderErrorKind.NotPermitted =>
-                    $"Not permitted to act on {process.Name} (pid {process.Id.Pid}). " +
-                    $"It belongs to {process.UserName ?? process.Uid.ToString()}; " +
-                    "installing the privileged helper would allow this.",
+                    $"Not permitted to act on {process.Name} (pid {process.Id.Pid}). "
+                        + $"It belongs to {process.UserName ?? process.Uid.ToString()}; "
+                        + "installing the privileged helper would allow this.",
                 ProviderErrorKind.HelperUnavailable =>
                     "The privileged helper is not available. See docs/HELPER.md.",
                 _ => e.Message,
             };
 
-            await ConfirmationDialog.ShowMessageAsync(owner, title, explanation).ConfigureAwait(true);
+            await ConfirmationDialog
+                .ShowMessageAsync(owner, title, explanation)
+                .ConfigureAwait(true);
         }
     }
 }

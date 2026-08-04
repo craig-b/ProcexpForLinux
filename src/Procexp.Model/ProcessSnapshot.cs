@@ -47,7 +47,8 @@ public sealed class ProcessSnapshot
 public sealed record SnapshotDiff(
     IReadOnlySet<ProcessId> Added,
     IReadOnlySet<ProcessId> Removed,
-    IReadOnlySet<ProcessId> Changed)
+    IReadOnlySet<ProcessId> Changed
+)
 {
     public static SnapshotDiff Between(ProcessSnapshot old, ProcessSnapshot @new)
     {
@@ -98,8 +99,10 @@ public static class ProcessTreeBuilder
     /// window before the kernel reparents them a sample can legitimately observe a
     /// PPID that no longer exists.
     /// </remarks>
-    public static (IReadOnlyList<ProcessId> Roots, IReadOnlyDictionary<ProcessId, IReadOnlyList<ProcessId>> Children)
-        Build(IReadOnlyDictionary<ProcessId, ProcessRecord> processes)
+    public static (
+        IReadOnlyList<ProcessId> Roots,
+        IReadOnlyDictionary<ProcessId, IReadOnlyList<ProcessId>> Children
+    ) Build(IReadOnlyDictionary<ProcessId, ProcessRecord> processes)
     {
         var children = new Dictionary<ProcessId, List<ProcessId>>();
         var roots = new List<ProcessId>();
@@ -130,7 +133,8 @@ public static class ProcessTreeBuilder
 
         var frozen = children.ToDictionary(
             static kv => kv.Key,
-            static kv => (IReadOnlyList<ProcessId>)kv.Value);
+            static kv => (IReadOnlyList<ProcessId>)kv.Value
+        );
 
         return (roots, frozen);
     }

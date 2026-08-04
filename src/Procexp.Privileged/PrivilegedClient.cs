@@ -31,7 +31,10 @@ public sealed class PrivilegedClient
         try
         {
             var response = await SendAsync(
-                new HelperRequest { Operation = HelperOperation.Hello }, cancellationToken).ConfigureAwait(false);
+                    new HelperRequest { Operation = HelperOperation.Hello },
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
 
             return response.Ok && response.Version == HelperConstants.ProtocolVersion;
         }
@@ -43,23 +46,28 @@ public sealed class PrivilegedClient
 
     /// <summary>Read <c>/proc/PID/io</c> for a process we do not own.</summary>
     public async Task<(ulong Read, ulong Written)?> ReadIoAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(
-            new HelperRequest
-            {
-                Operation = HelperOperation.ReadIo,
-                Pid = id.Pid,
-                StartTime = id.StartTime,
-            },
-            cancellationToken).ConfigureAwait(false);
+                new HelperRequest
+                {
+                    Operation = HelperOperation.ReadIo,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         if (!response.Ok || response.Content is null)
         {
             return null;
         }
 
-        ulong read = 0, written = 0;
+        ulong read = 0,
+            written = 0;
         foreach (var line in response.Content.Split('\n'))
         {
             if (line.StartsWith("read_bytes:", StringComparison.Ordinal))
@@ -77,16 +85,20 @@ public sealed class PrivilegedClient
 
     /// <summary>Read proportional set size from <c>smaps_rollup</c>.</summary>
     public async Task<ulong?> ReadProportionalMemoryAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(
-            new HelperRequest
-            {
-                Operation = HelperOperation.ReadProportionalMemory,
-                Pid = id.Pid,
-                StartTime = id.StartTime,
-            },
-            cancellationToken).ConfigureAwait(false);
+                new HelperRequest
+                {
+                    Operation = HelperOperation.ReadProportionalMemory,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         if (!response.Ok || response.Content is null)
         {
@@ -107,16 +119,20 @@ public sealed class PrivilegedClient
 
     /// <summary>Read the environment of a process we do not own.</summary>
     public async Task<IReadOnlyDictionary<string, string>?> ReadEnvironmentAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(
-            new HelperRequest
-            {
-                Operation = HelperOperation.ReadEnvironment,
-                Pid = id.Pid,
-                StartTime = id.StartTime,
-            },
-            cancellationToken).ConfigureAwait(false);
+                new HelperRequest
+                {
+                    Operation = HelperOperation.ReadEnvironment,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         if (!response.Ok || response.Content is null)
         {
@@ -136,7 +152,11 @@ public sealed class PrivilegedClient
         }
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var entry in Encoding.UTF8.GetString(raw).Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        foreach (
+            var entry in Encoding
+                .UTF8.GetString(raw)
+                .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+        )
         {
             var equals = entry.IndexOf('=');
             if (equals > 0)
@@ -150,16 +170,20 @@ public sealed class PrivilegedClient
 
     /// <summary>Mapped files for a process the caller cannot read directly.</summary>
     public async Task<IReadOnlyList<ModuleInfo>?> ReadModulesAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(
-            new HelperRequest
-            {
-                Operation = HelperOperation.ReadModules,
-                Pid = id.Pid,
-                StartTime = id.StartTime,
-            },
-            cancellationToken).ConfigureAwait(false);
+                new HelperRequest
+                {
+                    Operation = HelperOperation.ReadModules,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         return response.Ok && response.Content is not null
             ? HelperPayload.Modules(response.Content)
@@ -168,82 +192,128 @@ public sealed class PrivilegedClient
 
     /// <summary>Descriptors for a process the caller cannot read directly.</summary>
     public async Task<IReadOnlyList<FileDescriptorInfo>?> ReadFileDescriptorsAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(
-            new HelperRequest
-            {
-                Operation = HelperOperation.ReadFileDescriptors,
-                Pid = id.Pid,
-                StartTime = id.StartTime,
-            },
-            cancellationToken).ConfigureAwait(false);
+                new HelperRequest
+                {
+                    Operation = HelperOperation.ReadFileDescriptors,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         return response.Ok && response.Content is not null
             ? HelperPayload.FileDescriptors(response.Content)
             : null;
     }
 
-    public async Task SignalAsync(ProcessId id, int signal, CancellationToken cancellationToken = default)
+    public async Task SignalAsync(
+        ProcessId id,
+        int signal,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(
-            new HelperRequest
-            {
-                Operation = HelperOperation.Signal,
-                Pid = id.Pid,
-                StartTime = id.StartTime,
-                Signal = signal,
-            },
-            cancellationToken).ConfigureAwait(false);
+                new HelperRequest
+                {
+                    Operation = HelperOperation.Signal,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                    Signal = signal,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         if (!response.Ok)
         {
-            throw new ProviderException(ProviderErrorKind.Underlying, response.Error ?? "helper refused the signal");
+            throw new ProviderException(
+                ProviderErrorKind.Underlying,
+                response.Error ?? "helper refused the signal"
+            );
         }
     }
 
-    public async Task SetNiceAsync(ProcessId id, int nice, CancellationToken cancellationToken = default)
+    public async Task SetNiceAsync(
+        ProcessId id,
+        int nice,
+        CancellationToken cancellationToken = default
+    )
     {
         var response = await SendAsync(
-            new HelperRequest
-            {
-                Operation = HelperOperation.SetNice,
-                Pid = id.Pid,
-                StartTime = id.StartTime,
-                Nice = nice,
-            },
-            cancellationToken).ConfigureAwait(false);
+                new HelperRequest
+                {
+                    Operation = HelperOperation.SetNice,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                    Nice = nice,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         if (!response.Ok)
         {
-            throw new ProviderException(ProviderErrorKind.Underlying, response.Error ?? "helper refused the request");
+            throw new ProviderException(
+                ProviderErrorKind.Underlying,
+                response.Error ?? "helper refused the request"
+            );
         }
     }
 
     private static async Task<HelperResponse> SendAsync(
-        HelperRequest request, CancellationToken cancellationToken)
+        HelperRequest request,
+        CancellationToken cancellationToken
+    )
     {
         if (!IsAvailable)
         {
-            throw new ProviderException(ProviderErrorKind.HelperUnavailable, "the privileged helper is not running");
+            throw new ProviderException(
+                ProviderErrorKind.HelperUnavailable,
+                "the privileged helper is not running"
+            );
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(Timeout);
 
-        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        using var socket = new Socket(
+            AddressFamily.Unix,
+            SocketType.Stream,
+            ProtocolType.Unspecified
+        );
 
         try
         {
-            await socket.ConnectAsync(new UnixDomainSocketEndPoint(HelperConstants.SocketPath), timeout.Token)
+            await socket
+                .ConnectAsync(
+                    new UnixDomainSocketEndPoint(HelperConstants.SocketPath),
+                    timeout.Token
+                )
                 .ConfigureAwait(false);
 
             await using var stream = new NetworkStream(socket, ownsSocket: false);
-            await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 1024, leaveOpen: true)
+            await using var writer = new StreamWriter(
+                stream,
+                new UTF8Encoding(false),
+                1024,
+                leaveOpen: true
+            )
             {
                 AutoFlush = true,
             };
-            using var reader = new StreamReader(stream, Encoding.UTF8, false, 1024, leaveOpen: true);
+            using var reader = new StreamReader(
+                stream,
+                Encoding.UTF8,
+                false,
+                1024,
+                leaveOpen: true
+            );
 
             var json = JsonSerializer.Serialize(request, HelperJsonContext.Default.HelperRequest);
             await writer.WriteLineAsync(json.AsMemory(), timeout.Token).ConfigureAwait(false);
@@ -251,11 +321,14 @@ public sealed class PrivilegedClient
             var line = await reader.ReadLineAsync(timeout.Token).ConfigureAwait(false);
             if (line is null)
             {
-                throw new ProviderException(ProviderErrorKind.HelperUnavailable, "the helper closed the connection");
+                throw new ProviderException(
+                    ProviderErrorKind.HelperUnavailable,
+                    "the helper closed the connection"
+                );
             }
 
             return JsonSerializer.Deserialize(line, HelperJsonContext.Default.HelperResponse)
-                   ?? HelperResponse.Failure("unreadable response");
+                ?? HelperResponse.Failure("unreadable response");
         }
         catch (SocketException e)
         {
@@ -265,11 +338,15 @@ public sealed class PrivilegedClient
                 ProviderErrorKind.HelperUnavailable,
                 e.SocketErrorCode == SocketError.AccessDenied
                     ? $"not permitted to use the helper — membership of the '{HelperConstants.AccessGroup}' group is required"
-                    : $"could not reach the helper: {e.Message}");
+                    : $"could not reach the helper: {e.Message}"
+            );
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new ProviderException(ProviderErrorKind.HelperUnavailable, "the helper did not respond in time");
+            throw new ProviderException(
+                ProviderErrorKind.HelperUnavailable,
+                "the helper did not respond in time"
+            );
         }
     }
 }

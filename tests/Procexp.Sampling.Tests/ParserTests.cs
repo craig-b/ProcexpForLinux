@@ -27,7 +27,9 @@ public class CgroupTests
     [Fact]
     public void UserSessionIsNotASystemService()
     {
-        var result = Parse("0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-foo.scope\n");
+        var result = Parse(
+            "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-foo.scope\n"
+        );
 
         Assert.False(result.IsService);
         Assert.Equal("app-foo.scope", result.Unit);
@@ -52,9 +54,10 @@ public class CgroupTests
     public void UnifiedHierarchyWinsOverLegacyControllers()
     {
         var result = Parse(
-            "12:pids:/legacy/pids/path\n" +
-            "5:memory:/legacy/memory/path\n" +
-            "0::/system.slice/correct.service\n");
+            "12:pids:/legacy/pids/path\n"
+                + "5:memory:/legacy/memory/path\n"
+                + "0::/system.slice/correct.service\n"
+        );
 
         Assert.Equal("/system.slice/correct.service", result.Path);
         Assert.Equal("correct.service", result.Unit);
@@ -102,9 +105,10 @@ public class ProcMapsTests
     public void FoldsSegmentsOfOneFileIntoOneModule()
     {
         var modules = Parse(
-            "7f0000001000-7f0000002000 r--p 00000000 08:01 100 /usr/lib/libc.so.6\n" +
-            "7f0000002000-7f0000005000 r-xp 00001000 08:01 100 /usr/lib/libc.so.6\n" +
-            "7f0000005000-7f0000006000 rw-p 00004000 08:01 100 /usr/lib/libc.so.6\n");
+            "7f0000001000-7f0000002000 r--p 00000000 08:01 100 /usr/lib/libc.so.6\n"
+                + "7f0000002000-7f0000005000 r-xp 00001000 08:01 100 /usr/lib/libc.so.6\n"
+                + "7f0000005000-7f0000006000 rw-p 00004000 08:01 100 /usr/lib/libc.so.6\n"
+        );
 
         var module = Assert.Single(modules);
         Assert.Equal("/usr/lib/libc.so.6", module.Path);
@@ -123,9 +127,10 @@ public class ProcMapsTests
     public void SkipsAnonymousMappings()
     {
         var modules = Parse(
-            "7f0000001000-7f0000002000 rw-p 00000000 00:00 0 \n" +
-            "7f0000003000-7f0000004000 rw-p 00000000 00:00 0\n" +
-            "7f0000005000-7f0000006000 r-xp 00000000 08:01 100 /usr/bin/tool\n");
+            "7f0000001000-7f0000002000 rw-p 00000000 00:00 0 \n"
+                + "7f0000003000-7f0000004000 rw-p 00000000 00:00 0\n"
+                + "7f0000005000-7f0000006000 r-xp 00000000 08:01 100 /usr/bin/tool\n"
+        );
 
         Assert.Single(modules);
         Assert.Equal("/usr/bin/tool", modules[0].Path);
@@ -137,8 +142,9 @@ public class ProcMapsTests
         // [heap] and [stack] are named, so they survive the anonymous filter and
         // appear in the list, as they do in Process Explorer's DLL view.
         var modules = Parse(
-            "01000000-01021000 rw-p 00000000 00:00 0 [heap]\n" +
-            "7ffd00000000-7ffd00021000 rw-p 00000000 00:00 0 [stack]\n");
+            "01000000-01021000 rw-p 00000000 00:00 0 [heap]\n"
+                + "7ffd00000000-7ffd00021000 rw-p 00000000 00:00 0 [stack]\n"
+        );
 
         Assert.Equal(2, modules.Count);
         Assert.Contains(modules, m => m.Path == "[heap]");
@@ -148,7 +154,8 @@ public class ProcMapsTests
     public void HandlesPathsContainingSpaces()
     {
         var modules = Parse(
-            "7f0000001000-7f0000002000 r-xp 00000000 08:01 100 /opt/My App/lib my.so\n");
+            "7f0000001000-7f0000002000 r-xp 00000000 08:01 100 /opt/My App/lib my.so\n"
+        );
 
         Assert.Equal("/opt/My App/lib my.so", Assert.Single(modules).Path);
     }
@@ -157,9 +164,10 @@ public class ProcMapsTests
     public void PreservesFirstSeenOrder()
     {
         var modules = Parse(
-            "1000-2000 r-xp 0 08:01 1 /a.so\n" +
-            "3000-4000 r-xp 0 08:01 2 /b.so\n" +
-            "5000-6000 r--p 0 08:01 1 /a.so\n");
+            "1000-2000 r-xp 0 08:01 1 /a.so\n"
+                + "3000-4000 r-xp 0 08:01 2 /b.so\n"
+                + "5000-6000 r--p 0 08:01 1 /a.so\n"
+        );
 
         Assert.Equal(["/a.so", "/b.so"], modules.Select(m => m.Path));
     }
@@ -168,8 +176,8 @@ public class ProcMapsTests
     public void IgnoresMalformedLines()
     {
         var modules = Parse(
-            "not a map line\n" +
-            "7f0000001000-7f0000002000 r-xp 00000000 08:01 100 /usr/bin/tool\n");
+            "not a map line\n" + "7f0000001000-7f0000002000 r-xp 00000000 08:01 100 /usr/bin/tool\n"
+        );
 
         Assert.Equal("/usr/bin/tool", Assert.Single(modules).Path);
     }

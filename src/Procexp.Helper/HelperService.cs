@@ -48,7 +48,11 @@ internal sealed partial class HelperService(Action<string> log)
             File.Delete(HelperConstants.SocketPath);
         }
 
-        using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        using var listener = new Socket(
+            AddressFamily.Unix,
+            SocketType.Stream,
+            ProtocolType.Unspecified
+        );
         listener.Bind(new UnixDomainSocketEndPoint(HelperConstants.SocketPath));
 
         // Permissions are the real access gate. Group-readable and -writable,
@@ -56,8 +60,11 @@ internal sealed partial class HelperService(Action<string> log)
         // and that is a deliberate administrative decision at install time.
         File.SetUnixFileMode(
             HelperConstants.SocketPath,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite |
-            UnixFileMode.GroupRead | UnixFileMode.GroupWrite);
+            UnixFileMode.UserRead
+                | UnixFileMode.UserWrite
+                | UnixFileMode.GroupRead
+                | UnixFileMode.GroupWrite
+        );
 
         ApplyGroupOwnership(HelperConstants.SocketPath);
 
@@ -103,15 +110,28 @@ internal sealed partial class HelperService(Action<string> log)
             // gives the audit log a real identity to record.
             if (!IsAuthorised(credentials.Value))
             {
-                log($"rejecting peer pid {credentials.Value.Pid} uid {credentials.Value.Uid}: not authorised");
+                log(
+                    $"rejecting peer pid {credentials.Value.Pid} uid {credentials.Value.Uid}: not authorised"
+                );
                 return;
             }
 
             try
             {
                 using var stream = new NetworkStream(peer, ownsSocket: false);
-                using var reader = new StreamReader(stream, Encoding.UTF8, false, 1024, leaveOpen: true);
-                await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 1024, leaveOpen: true)
+                using var reader = new StreamReader(
+                    stream,
+                    Encoding.UTF8,
+                    false,
+                    1024,
+                    leaveOpen: true
+                );
+                await using var writer = new StreamWriter(
+                    stream,
+                    new UTF8Encoding(false),
+                    1024,
+                    leaveOpen: true
+                )
                 {
                     AutoFlush = true,
                 };
@@ -126,7 +146,8 @@ internal sealed partial class HelperService(Action<string> log)
 
                     if (line.Length > MaxRequestBytes)
                     {
-                        await WriteAsync(writer, HelperResponse.Failure("request too large")).ConfigureAwait(false);
+                        await WriteAsync(writer, HelperResponse.Failure("request too large"))
+                            .ConfigureAwait(false);
                         break;
                     }
 
@@ -134,7 +155,8 @@ internal sealed partial class HelperService(Action<string> log)
                     await WriteAsync(writer, response).ConfigureAwait(false);
                 }
             }
-            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException)
+            catch (Exception e)
+                when (e is IOException or SocketException or OperationCanceledException)
             {
                 // The client went away mid-conversation; nothing to do.
             }
@@ -142,7 +164,9 @@ internal sealed partial class HelperService(Action<string> log)
     }
 
     private static Task WriteAsync(StreamWriter writer, HelperResponse response) =>
-        writer.WriteLineAsync(JsonSerializer.Serialize(response, HelperJsonContext.Default.HelperResponse));
+        writer.WriteLineAsync(
+            JsonSerializer.Serialize(response, HelperJsonContext.Default.HelperResponse)
+        );
 
     private HelperResponse Handle(string line, PeerCredentials peer)
     {
@@ -170,13 +194,17 @@ internal sealed partial class HelperService(Action<string> log)
         // re-verifies identity before touching it.
         if (!ProcessIdentity.Verify(request.Pid, request.StartTime))
         {
-            return HelperResponse.Failure("process identity does not match; it has exited or the pid was recycled");
+            return HelperResponse.Failure(
+                "process identity does not match; it has exited or the pid was recycled"
+            );
         }
 
         return request.Operation switch
         {
             HelperOperation.ReadIo => ReadProcFile($"/proc/{request.Pid}/io"),
-            HelperOperation.ReadProportionalMemory => ReadProcFile($"/proc/{request.Pid}/smaps_rollup"),
+            HelperOperation.ReadProportionalMemory => ReadProcFile(
+                $"/proc/{request.Pid}/smaps_rollup"
+            ),
             HelperOperation.ReadEnvironment => ReadEnvironment(request.Pid, peer),
             HelperOperation.ReadModules => ReadModules(request),
             HelperOperation.ReadFileDescriptors => ReadFileDescriptors(request),
@@ -214,7 +242,11 @@ internal sealed partial class HelperService(Action<string> log)
     {
         try
         {
-            using var stream = new FileStream($"/proc/{pid}/environ", FileMode.Open, FileAccess.Read);
+            using var stream = new FileStream(
+                $"/proc/{pid}/environ",
+                FileMode.Open,
+                FileAccess.Read
+            );
             var buffer = new byte[MaxEnvironmentBytes];
             var read = stream.ReadAtLeast(buffer, MaxEnvironmentBytes, throwOnEndOfStream: false);
 
@@ -244,11 +276,15 @@ internal sealed partial class HelperService(Action<string> log)
     {
         try
         {
-            var modules = _sampler.ModulesAsync(new ProcessId(request.Pid, request.StartTime))
-                .AsTask().GetAwaiter().GetResult();
+            var modules = _sampler
+                .ModulesAsync(new ProcessId(request.Pid, request.StartTime))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
 
             return HelperResponse.Success(
-                JsonSerializer.Serialize(modules, HelperJsonContext.Default.IReadOnlyListModuleInfo));
+                JsonSerializer.Serialize(modules, HelperJsonContext.Default.IReadOnlyListModuleInfo)
+            );
         }
         catch (ProviderException e)
         {
@@ -260,11 +296,18 @@ internal sealed partial class HelperService(Action<string> log)
     {
         try
         {
-            var descriptors = _sampler.FileDescriptorsAsync(new ProcessId(request.Pid, request.StartTime))
-                .AsTask().GetAwaiter().GetResult();
+            var descriptors = _sampler
+                .FileDescriptorsAsync(new ProcessId(request.Pid, request.StartTime))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
 
             return HelperResponse.Success(
-                JsonSerializer.Serialize(descriptors, HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo));
+                JsonSerializer.Serialize(
+                    descriptors,
+                    HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo
+                )
+            );
         }
         catch (ProviderException e)
         {
@@ -290,7 +333,9 @@ internal sealed partial class HelperService(Action<string> log)
 
         if (Kill(request.Pid, request.Signal) != 0)
         {
-            return HelperResponse.Failure($"kill failed with errno {Marshal.GetLastPInvokeError()}");
+            return HelperResponse.Failure(
+                $"kill failed with errno {Marshal.GetLastPInvokeError()}"
+            );
         }
 
         return HelperResponse.Success();
@@ -305,7 +350,9 @@ internal sealed partial class HelperService(Action<string> log)
         Marshal.SetLastSystemError(0);
         if (SetPriority(0, (uint)request.Pid, nice) == -1 && Marshal.GetLastPInvokeError() != 0)
         {
-            return HelperResponse.Failure($"setpriority failed with errno {Marshal.GetLastPInvokeError()}");
+            return HelperResponse.Failure(
+                $"setpriority failed with errno {Marshal.GetLastPInvokeError()}"
+            );
         }
 
         return HelperResponse.Success();
@@ -350,7 +397,11 @@ internal sealed partial class HelperService(Action<string> log)
             {
                 // name:password:gid:member,member
                 var fields = line.Split(':');
-                if (fields.Length >= 4 && fields[0] == name && uint.TryParse(fields[2], out var gid))
+                if (
+                    fields.Length >= 4
+                    && fields[0] == name
+                    && uint.TryParse(fields[2], out var gid)
+                )
                 {
                     return (gid, fields[3].Split(',', StringSplitOptions.RemoveEmptyEntries));
                 }
@@ -371,7 +422,11 @@ internal sealed partial class HelperService(Action<string> log)
             foreach (var line in File.ReadLines("/etc/passwd"))
             {
                 var fields = line.Split(':');
-                if (fields.Length >= 3 && uint.TryParse(fields[2], out var candidate) && candidate == uid)
+                if (
+                    fields.Length >= 3
+                    && uint.TryParse(fields[2], out var candidate)
+                    && candidate == uid
+                )
                 {
                     return fields[0];
                 }
@@ -390,9 +445,14 @@ internal sealed partial class HelperService(Action<string> log)
         Directory.CreateDirectory(HelperConstants.SocketDirectory);
         File.SetUnixFileMode(
             HelperConstants.SocketDirectory,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            UnixFileMode.UserRead
+                | UnixFileMode.UserWrite
+                | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead
+                | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead
+                | UnixFileMode.OtherExecute
+        );
 
         ApplyGroupOwnership(HelperConstants.SocketDirectory);
     }
@@ -402,13 +462,17 @@ internal sealed partial class HelperService(Action<string> log)
         var group = ReadGroup(HelperConstants.AccessGroup);
         if (group is null)
         {
-            log($"warning: group '{HelperConstants.AccessGroup}' does not exist, so only root can connect");
+            log(
+                $"warning: group '{HelperConstants.AccessGroup}' does not exist, so only root can connect"
+            );
             return;
         }
 
         if (Chown(path, 0, group.Value.Gid) != 0)
         {
-            log($"warning: could not set group ownership on {path} (errno {Marshal.GetLastPInvokeError()})");
+            log(
+                $"warning: could not set group ownership on {path} (errno {Marshal.GetLastPInvokeError()})"
+            );
         }
     }
 
@@ -418,6 +482,11 @@ internal sealed partial class HelperService(Action<string> log)
     [LibraryImport("libc", EntryPoint = "setpriority", SetLastError = true)]
     private static partial int SetPriority(int which, uint who, int priority);
 
-    [LibraryImport("libc", EntryPoint = "chown", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    [LibraryImport(
+        "libc",
+        EntryPoint = "chown",
+        StringMarshalling = StringMarshalling.Utf8,
+        SetLastError = true
+    )]
     private static partial int Chown(string path, uint owner, uint group);
 }

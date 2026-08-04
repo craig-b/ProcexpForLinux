@@ -89,20 +89,25 @@ public sealed record ProvenanceInfo
     /// One-line summary for the Verified Signer column, chosen to be directly
     /// comparable to what the macOS build shows for a signed binary.
     /// </summary>
-    public string DisplayName => Status switch
-    {
-        ProvenanceStatus.PackageVerified when Repository is not null && PackageName is not null =>
-            $"{Repository}/{PackageName} {PackageVersion}".TrimEnd(),
-        ProvenanceStatus.PackageVerified when PackageName is not null =>
-            $"{PackageName} {PackageVersion}".TrimEnd(),
-        ProvenanceStatus.PackageModified when PackageName is not null =>
-            $"{PackageName} (modified)",
-        ProvenanceStatus.SandboxedBundle when BundleId is not null => BundleId,
-        ProvenanceStatus.Unpackaged => "(unpackaged)",
-        ProvenanceStatus.Verifying => "(verifying...)",
-        ProvenanceStatus.Unverified => "",
-        _ => "(unknown)",
-    };
+    public string DisplayName =>
+        Status switch
+        {
+            ProvenanceStatus.PackageVerified
+                when Repository is not null && PackageName is not null =>
+                $"{Repository}/{PackageName} {PackageVersion}".TrimEnd(),
+            ProvenanceStatus.PackageVerified when PackageName is not null =>
+                $"{PackageName} {PackageVersion}".TrimEnd(),
+            ProvenanceStatus.PackageModified when PackageName is not null =>
+                $"{PackageName} (modified)",
+            ProvenanceStatus.SandboxedBundle when BundleId is not null => BundleId,
+            ProvenanceStatus.Unpackaged => "(unpackaged)",
+            ProvenanceStatus.Verifying => "(verifying...)",
+            ProvenanceStatus.Unverified => "",
+            _ => "(unknown)",
+        };
 
-    public static readonly ProvenanceInfo Unverified = new() { Status = ProvenanceStatus.Unverified };
+    public static readonly ProvenanceInfo Unverified = new()
+    {
+        Status = ProvenanceStatus.Unverified,
+    };
 }

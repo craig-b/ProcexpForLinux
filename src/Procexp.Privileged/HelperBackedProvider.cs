@@ -22,34 +22,47 @@ public sealed class HelperBackedProvider(IProcessDataProvider inner, PrivilegedC
     : IProcessDataProvider
 {
     public ProviderCapabilities Capabilities =>
-        inner.Capabilities |
-        ProviderCapabilities.CrossUser |
-        ProviderCapabilities.Environment |
-        ProviderCapabilities.ProcessIo |
-        ProviderCapabilities.ProportionalMemory;
+        inner.Capabilities
+        | ProviderCapabilities.CrossUser
+        | ProviderCapabilities.Environment
+        | ProviderCapabilities.ProcessIo
+        | ProviderCapabilities.ProportionalMemory;
 
-    public IAsyncEnumerable<ProcessSnapshot> Snapshots(TimeSpan interval, CancellationToken cancellationToken = default) =>
-        inner.Snapshots(interval, cancellationToken);
+    public IAsyncEnumerable<ProcessSnapshot> Snapshots(
+        TimeSpan interval,
+        CancellationToken cancellationToken = default
+    ) => inner.Snapshots(interval, cancellationToken);
 
-    public ValueTask<ProcessSnapshot> SnapshotAsync(CancellationToken cancellationToken = default) =>
-        inner.SnapshotAsync(cancellationToken);
+    public ValueTask<ProcessSnapshot> SnapshotAsync(
+        CancellationToken cancellationToken = default
+    ) => inner.SnapshotAsync(cancellationToken);
 
     // Threads, command lines and working directories are readable cross-user, so
     // they never need the helper.
-    public ValueTask<IReadOnlyList<ThreadInfo>> ThreadsAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        inner.ThreadsAsync(id, cancellationToken);
+    public ValueTask<IReadOnlyList<ThreadInfo>> ThreadsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => inner.ThreadsAsync(id, cancellationToken);
 
-    public ValueTask<string?> CommandLineAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        inner.CommandLineAsync(id, cancellationToken);
+    public ValueTask<string?> CommandLineAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => inner.CommandLineAsync(id, cancellationToken);
 
-    public ValueTask<string?> CurrentDirectoryAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        inner.CurrentDirectoryAsync(id, cancellationToken);
+    public ValueTask<string?> CurrentDirectoryAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => inner.CurrentDirectoryAsync(id, cancellationToken);
 
-    public ValueTask<IReadOnlyList<string>> StringsAsync(ProcessId id, CancellationToken cancellationToken = default) =>
-        inner.StringsAsync(id, cancellationToken);
+    public ValueTask<IReadOnlyList<string>> StringsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    ) => inner.StringsAsync(id, cancellationToken);
 
     public async ValueTask<IReadOnlyList<ModuleInfo>> ModulesAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
@@ -57,7 +70,9 @@ public sealed class HelperBackedProvider(IProcessDataProvider inner, PrivilegedC
         }
         catch (ProviderException e) when (e.Kind == ProviderErrorKind.NotPermitted)
         {
-            var viaHelper = await client.ReadModulesAsync(id, cancellationToken).ConfigureAwait(false);
+            var viaHelper = await client
+                .ReadModulesAsync(id, cancellationToken)
+                .ConfigureAwait(false);
 
             // No helper, or it refused too: the original refusal is the honest
             // answer, and the UI already knows how to explain it.
@@ -71,7 +86,9 @@ public sealed class HelperBackedProvider(IProcessDataProvider inner, PrivilegedC
     }
 
     public async ValueTask<IReadOnlyList<FileDescriptorInfo>> FileDescriptorsAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
@@ -79,7 +96,9 @@ public sealed class HelperBackedProvider(IProcessDataProvider inner, PrivilegedC
         }
         catch (ProviderException e) when (e.Kind == ProviderErrorKind.NotPermitted)
         {
-            var viaHelper = await client.ReadFileDescriptorsAsync(id, cancellationToken).ConfigureAwait(false);
+            var viaHelper = await client
+                .ReadFileDescriptorsAsync(id, cancellationToken)
+                .ConfigureAwait(false);
 
             // No helper, or it refused too: the original refusal is the honest
             // answer, and the UI already knows how to explain it.
@@ -93,7 +112,9 @@ public sealed class HelperBackedProvider(IProcessDataProvider inner, PrivilegedC
     }
 
     public async ValueTask<IReadOnlyDictionary<string, string>> EnvironmentAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
@@ -101,7 +122,9 @@ public sealed class HelperBackedProvider(IProcessDataProvider inner, PrivilegedC
         }
         catch (ProviderException e) when (e.Kind == ProviderErrorKind.NotPermitted)
         {
-            var viaHelper = await client.ReadEnvironmentAsync(id, cancellationToken).ConfigureAwait(false);
+            var viaHelper = await client
+                .ReadEnvironmentAsync(id, cancellationToken)
+                .ConfigureAwait(false);
 
             // No helper, or it refused too: the original refusal is the honest
             // answer, and the UI already knows how to explain it.
@@ -124,7 +147,10 @@ internal static class HelperPayload
     internal static IReadOnlyList<FileDescriptorInfo>? FileDescriptors(string json) =>
         Deserialize(json, HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo);
 
-    private static T? Deserialize<T>(string json, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type)
+    private static T? Deserialize<T>(
+        string json,
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type
+    )
     {
         try
         {

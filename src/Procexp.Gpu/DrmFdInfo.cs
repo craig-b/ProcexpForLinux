@@ -164,7 +164,14 @@ internal static class DrmFdInfo
     private static string Encoding(ReadOnlySpan<byte> span)
     {
         var end = span.Length;
-        while (end > 0 && (span[end - 1] == (byte)'\r' || span[end - 1] == (byte)' ' || span[end - 1] == (byte)'\t'))
+        while (
+            end > 0
+            && (
+                span[end - 1] == (byte)'\r'
+                || span[end - 1] == (byte)' '
+                || span[end - 1] == (byte)'\t'
+            )
+        )
         {
             end--;
         }

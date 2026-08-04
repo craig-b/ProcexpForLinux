@@ -21,7 +21,12 @@ namespace Procexp.App.Controls;
 /// </remarks>
 public sealed class FormattedTextCache(Typeface typeface, double fontSize)
 {
-    private readonly record struct Key(string Text, double MaxWidth, bool Emphasised, bool Selected);
+    private readonly record struct Key(
+        string Text,
+        double MaxWidth,
+        bool Emphasised,
+        bool Selected
+    );
 
     private sealed record Entry(FormattedText Text)
     {
@@ -47,7 +52,13 @@ public sealed class FormattedTextCache(Typeface typeface, double fontSize)
         }
     }
 
-    public FormattedText Get(string text, double maxWidth, IBrush brush, bool emphasised, bool selected)
+    public FormattedText Get(
+        string text,
+        double maxWidth,
+        IBrush brush,
+        bool emphasised,
+        bool selected
+    )
     {
         // Quantise the width so a one-pixel resize does not invalidate every
         // entry. Trimming only changes at character boundaries anyway.
@@ -66,7 +77,8 @@ public sealed class FormattedTextCache(Typeface typeface, double fontSize)
             FlowDirection.LeftToRight,
             typeface,
             fontSize,
-            brush)
+            brush
+        )
         {
             MaxTextWidth = quantised,
             MaxLineCount = 1,
@@ -87,7 +99,12 @@ public sealed class FormattedTextCache(Typeface typeface, double fontSize)
     {
         var cutoff = _frame - UnusedFrameLimit;
 
-        foreach (var key in _entries.Where(e => e.Value.LastUsedFrame < cutoff).Select(e => e.Key).ToList())
+        foreach (
+            var key in _entries
+                .Where(e => e.Value.LastUsedFrame < cutoff)
+                .Select(e => e.Key)
+                .ToList()
+        )
         {
             _entries.Remove(key);
         }

@@ -51,7 +51,14 @@ public sealed class ColumnChooserWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Spacing = 6,
             Margin = new Thickness(10, 0),
-            Children = { add, remove, new Border { Height = 16 }, up, down },
+            Children =
+            {
+                add,
+                remove,
+                new Border { Height = 16 },
+                up,
+                down,
+            },
         };
 
         var lists = new Grid
@@ -76,11 +83,14 @@ public sealed class ColumnChooserWindow : Window
         Grid.SetColumn(_selected, 2);
         lists.Children.Add(_selected);
 
-        var ok = Button("OK", () =>
-        {
-            Result = [.. _selectedColumns];
-            Close();
-        });
+        var ok = Button(
+            "OK",
+            () =>
+            {
+                Result = [.. _selectedColumns];
+                Close();
+            }
+        );
 
         ok.IsDefault = true;
         ok.MinWidth = 88;
@@ -89,14 +99,17 @@ public sealed class ColumnChooserWindow : Window
         cancel.IsCancel = true;
         cancel.MinWidth = 88;
 
-        var reset = Button("Defaults", () =>
-        {
-            _selectedColumns.Clear();
-            _selectedColumns.AddRange(Columns.Default);
-            _availableColumns.Clear();
-            _availableColumns.AddRange(Columns.Supported.Except(_selectedColumns));
-            Refresh();
-        });
+        var reset = Button(
+            "Defaults",
+            () =>
+            {
+                _selectedColumns.Clear();
+                _selectedColumns.AddRange(Columns.Default);
+                _availableColumns.Clear();
+                _availableColumns.AddRange(Columns.Supported.Except(_selectedColumns));
+                Refresh();
+            }
+        );
 
         var buttons = new StackPanel
         {
@@ -104,7 +117,13 @@ public sealed class ColumnChooserWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
             Margin = new Thickness(16, 0, 16, 16),
-            Children = { reset, new Border { Width = 24 }, cancel, ok },
+            Children =
+            {
+                reset,
+                new Border { Width = 24 },
+                cancel,
+                ok,
+            },
         };
 
         var root = new DockPanel();
@@ -174,7 +193,10 @@ public sealed class ColumnChooserWindow : Window
             return;
         }
 
-        (_selectedColumns[index], _selectedColumns[target]) = (_selectedColumns[target], _selectedColumns[index]);
+        (_selectedColumns[index], _selectedColumns[target]) = (
+            _selectedColumns[target],
+            _selectedColumns[index]
+        );
 
         Refresh();
         _selected.SelectedIndex = target;
@@ -182,7 +204,9 @@ public sealed class ColumnChooserWindow : Window
 
     private void Refresh()
     {
-        _availableColumns.Sort((a, b) => string.Compare(Columns.Title(a), Columns.Title(b), StringComparison.Ordinal));
+        _availableColumns.Sort(
+            (a, b) => string.Compare(Columns.Title(a), Columns.Title(b), StringComparison.Ordinal)
+        );
 
         _available.ItemsSource = _availableColumns.Select(c => new ColumnEntry(c)).ToList();
         _selected.ItemsSource = _selectedColumns.Select(c => new ColumnEntry(c)).ToList();
@@ -192,6 +216,8 @@ public sealed class ColumnChooserWindow : Window
     private sealed record ColumnEntry(Column Column)
     {
         public override string ToString() =>
-            Columns.Pinned.Contains(Column) ? $"{Columns.Title(Column)}  (required)" : Columns.Title(Column);
+            Columns.Pinned.Contains(Column)
+                ? $"{Columns.Title(Column)}  (required)"
+                : Columns.Title(Column);
     }
 }

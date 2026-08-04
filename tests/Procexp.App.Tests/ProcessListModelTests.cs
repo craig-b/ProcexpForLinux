@@ -13,7 +13,12 @@ public class ProcessListModelTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private static ProcessRecord Record(int pid, ulong start = 100, string name = "proc", int? ppid = null) =>
+    private static ProcessRecord Record(
+        int pid,
+        ulong start = 100,
+        string name = "proc",
+        int? ppid = null
+    ) =>
         new()
         {
             Id = new ProcessId(pid, start),
@@ -60,8 +65,10 @@ public class ProcessListModelTests
         var model = new ProcessListModel();
         model.Apply(Snapshot(Record(1), Record(2), Record(3)), T0);
 
-        Assert.All(model.Displayed.Values, p =>
-            Assert.False(p.Flags.HasFlag(ProcessFlags.NewProcess)));
+        Assert.All(
+            model.Displayed.Values,
+            p => Assert.False(p.Flags.HasFlag(ProcessFlags.NewProcess))
+        );
     }
 
     /// <summary>
@@ -130,7 +137,10 @@ public class ProcessListModelTests
         Assert.True(model.IsDead(new ProcessId(2, 100)));
 
         // Same pid, different start time: a new occupant.
-        model.Apply(Snapshot(Record(1), Record(2, start: 999, name: "new")), T0 + TimeSpan.FromSeconds(1.2));
+        model.Apply(
+            Snapshot(Record(1), Record(2, start: 999, name: "new")),
+            T0 + TimeSpan.FromSeconds(1.2)
+        );
 
         var recycled = new ProcessId(2, 999);
 
@@ -193,7 +203,13 @@ public class ProcessListModelTests
         model.Apply(Snapshot(Record(1)), T0);
 
         var snapshot = model.AsSnapshot();
-        var rows = RowFlattener.Flatten(snapshot, [], Column.Pid, descending: false, treeMode: true);
+        var rows = RowFlattener.Flatten(
+            snapshot,
+            [],
+            Column.Pid,
+            descending: false,
+            treeMode: true
+        );
 
         Assert.Equal(2, rows.Count);
         Assert.Contains(rows, r => r.Process.Flags.HasFlag(ProcessFlags.DeadProcess));

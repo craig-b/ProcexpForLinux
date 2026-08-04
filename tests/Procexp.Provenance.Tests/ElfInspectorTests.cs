@@ -13,7 +13,7 @@ public class ElfInspectorTests
     [Fact]
     public void RejectsNonElfFiles()
     {
-        var path = WriteTemporary([0x4D, 0x5A, 0x90, 0x00, 0x03]);   // a PE header
+        var path = WriteTemporary([0x4D, 0x5A, 0x90, 0x00, 0x03]); // a PE header
         try
         {
             Assert.False(ElfInspector.Inspect(path).IsElf);
@@ -69,7 +69,7 @@ public class ElfInspectorTests
     [Fact]
     public void FindsBuildIdWhenPrecededByOtherNotes()
     {
-        var buildId = new byte[] { 0xAA, 0xBB, 0xCC };   // 3 bytes, so padded
+        var buildId = new byte[] { 0xAA, 0xBB, 0xCC }; // 3 bytes, so padded
         var path = WriteTemporary(BuildElf(buildId, precedingNotes: 2));
 
         try
@@ -101,7 +101,7 @@ public class ElfInspectorTests
     [Fact]
     public void RecognisesSharedObjects()
     {
-        var path = WriteTemporary(BuildElf(buildId: null, elfType: 3));   // ET_DYN
+        var path = WriteTemporary(BuildElf(buildId: null, elfType: 3)); // ET_DYN
         try
         {
             Assert.True(ElfInspector.Inspect(path).IsSharedObject);
@@ -136,7 +136,7 @@ public class ElfInspectorTests
 
         if (buildId is not null)
         {
-            AppendNote(notes, "GNU\0"u8.ToArray(), buildId, type: 3);   // NT_GNU_BUILD_ID
+            AppendNote(notes, "GNU\0"u8.ToArray(), buildId, type: 3); // NT_GNU_BUILD_ID
         }
         else
         {
@@ -151,18 +151,18 @@ public class ElfInspectorTests
         span[1] = (byte)'E';
         span[2] = (byte)'L';
         span[3] = (byte)'F';
-        span[4] = 2;    // ELFCLASS64
-        span[5] = 1;    // ELFDATA2LSB
-        span[6] = 1;    // EV_CURRENT
+        span[4] = 2; // ELFCLASS64
+        span[5] = 1; // ELFDATA2LSB
+        span[6] = 1; // EV_CURRENT
         BinaryPrimitives.WriteUInt16LittleEndian(span[16..], elfType);
-        BinaryPrimitives.WriteUInt16LittleEndian(span[18..], 0x3E);              // x86-64
+        BinaryPrimitives.WriteUInt16LittleEndian(span[18..], 0x3E); // x86-64
         BinaryPrimitives.WriteUInt64LittleEndian(span[32..], ProgramHeaderOffset);
         BinaryPrimitives.WriteUInt16LittleEndian(span[54..], ProgramHeaderSize);
-        BinaryPrimitives.WriteUInt16LittleEndian(span[56..], 1);                 // one program header
+        BinaryPrimitives.WriteUInt16LittleEndian(span[56..], 1); // one program header
 
         // Program header: PT_NOTE
         var programHeader = span[ProgramHeaderOffset..];
-        BinaryPrimitives.WriteUInt32LittleEndian(programHeader, 4);              // PT_NOTE
+        BinaryPrimitives.WriteUInt32LittleEndian(programHeader, 4); // PT_NOTE
         BinaryPrimitives.WriteUInt64LittleEndian(programHeader[8..], (ulong)notesOffset);
         BinaryPrimitives.WriteUInt64LittleEndian(programHeader[32..], (ulong)notes.Count);
 

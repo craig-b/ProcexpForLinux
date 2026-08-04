@@ -27,7 +27,10 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
 
     public PackageManagerKind PackageManager => _packages.Kind;
 
-    public ValueTask<ProvenanceInfo> ProvenanceAsync(string path, CancellationToken cancellationToken = default)
+    public ValueTask<ProvenanceInfo> ProvenanceAsync(
+        string path,
+        CancellationToken cancellationToken = default
+    )
     {
         // Keyed by path plus identity, so an upgraded binary is re-examined rather
         // than served stale from a previous version.
@@ -98,14 +101,16 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
         {
             return new ProvenanceInfo
             {
-                Status = _packages.Kind == PackageManagerKind.None
-                    ? ProvenanceStatus.Unknown
-                    : ProvenanceStatus.Unpackaged,
+                Status =
+                    _packages.Kind == PackageManagerKind.None
+                        ? ProvenanceStatus.Unknown
+                        : ProvenanceStatus.Unpackaged,
                 BuildId = elf.BuildId,
                 HasImaSignature = hasIma,
-                VerificationError = _packages.Kind == PackageManagerKind.None
-                    ? "no package database on this system"
-                    : null,
+                VerificationError =
+                    _packages.Kind == PackageManagerKind.None
+                        ? "no package database on this system"
+                        : null,
             };
         }
 
@@ -131,7 +136,9 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
     /// for the process list.
     /// </summary>
     public async ValueTask<ProvenanceInfo> DeepProvenanceAsync(
-        string path, CancellationToken cancellationToken = default)
+        string path,
+        CancellationToken cancellationToken = default
+    )
     {
         var basic = await ProvenanceAsync(path, cancellationToken).ConfigureAwait(false);
         var sha = await ComputeSha256Async(path, cancellationToken).ConfigureAwait(false);
@@ -159,15 +166,26 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
         };
     }
 
-    public ValueTask<VirusTotalResult?> VirusTotalAsync(string sha256, CancellationToken cancellationToken = default) =>
-        _virusTotal.ResultAsync(sha256, cancellationToken);
+    public ValueTask<VirusTotalResult?> VirusTotalAsync(
+        string sha256,
+        CancellationToken cancellationToken = default
+    ) => _virusTotal.ResultAsync(sha256, cancellationToken);
 
-    public static async ValueTask<string?> ComputeSha256Async(string path, CancellationToken cancellationToken = default)
+    public static async ValueTask<string?> ComputeSha256Async(
+        string path,
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
             await using var stream = new FileStream(
-                path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 16, useAsync: true);
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite,
+                1 << 16,
+                useAsync: true
+            );
             var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
             return Convert.ToHexStringLower(hash);
         }
@@ -222,6 +240,11 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
         }
     }
 
-    [LibraryImport("libc", EntryPoint = "getxattr", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    [LibraryImport(
+        "libc",
+        EntryPoint = "getxattr",
+        StringMarshalling = StringMarshalling.Utf8,
+        SetLastError = true
+    )]
     private static partial nint GetXattr(string path, string name, nint value, nuint size);
 }

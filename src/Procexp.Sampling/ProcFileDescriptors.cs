@@ -55,16 +55,18 @@ internal static class ProcFileDescriptors
                 var (kind, display) = Classify(target);
                 var info = ReadFdInfo($"/proc/{id.Pid}/fdinfo/{name}", ref buffer);
 
-                result.Add(new FileDescriptorInfo
-                {
-                    Fd = fd,
-                    Kind = kind,
-                    Name = display,
-                    Offset = info.Position,
-                    OpenFlags = info.Flags,
-                    Access = DecodeAccess(info.Flags),
-                    Inode = ExtractInode(target) ?? info.Inode,
-                });
+                result.Add(
+                    new FileDescriptorInfo
+                    {
+                        Fd = fd,
+                        Kind = kind,
+                        Name = display,
+                        Offset = info.Position,
+                        OpenFlags = info.Flags,
+                        Access = DecodeAccess(info.Flags),
+                        Inode = ExtractInode(target) ?? info.Inode,
+                    }
+                );
             }
         }
         finally
@@ -167,8 +169,12 @@ internal static class ProcFileDescriptors
             return null;
         }
 
-        return ulong.TryParse(target.AsSpan(open + 1, close - open - 1),
-            NumberStyles.None, CultureInfo.InvariantCulture, out var inode)
+        return ulong.TryParse(
+            target.AsSpan(open + 1, close - open - 1),
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out var inode
+        )
             ? inode
             : null;
     }

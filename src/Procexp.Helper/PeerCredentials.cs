@@ -28,7 +28,13 @@ internal static partial class PeerCredentialReader
     private const int SoPeercred = 17;
 
     [LibraryImport("libc", EntryPoint = "getsockopt", SetLastError = true)]
-    private static unsafe partial int GetSockOpt(int socket, int level, int name, void* value, int* length);
+    private static unsafe partial int GetSockOpt(
+        int socket,
+        int level,
+        int name,
+        void* value,
+        int* length
+    );
 
     /// <summary>Read the peer's credentials, or null if the kernel will not say.</summary>
     internal static unsafe PeerCredentials? Read(Socket socket)

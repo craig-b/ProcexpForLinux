@@ -68,34 +68,34 @@ internal static class ProcStat
         var field = ProcFile.NextField(ref rest);
         fields.State = field.IsEmpty ? '\0' : (char)field[0];
 
-        fields.Ppid = ProcFile.ParseInt32(ProcFile.NextField(ref rest));          // 4
-        ProcFile.NextField(ref rest);                                             // 5  pgrp
-        fields.SessionId = ProcFile.ParseInt32(ProcFile.NextField(ref rest));      // 6  session
-        fields.TtyNr = ProcFile.ParseInt32(ProcFile.NextField(ref rest));          // 7
-        ProcFile.NextField(ref rest);                                             // 8  tpgid
-        fields.Flags = (uint)ProcFile.ParseUInt64(ProcFile.NextField(ref rest));   // 9
-        fields.MinorFaults = ProcFile.ParseUInt64(ProcFile.NextField(ref rest));   // 10
-        ProcFile.NextField(ref rest);                                             // 11 cminflt
-        fields.MajorFaults = ProcFile.ParseUInt64(ProcFile.NextField(ref rest));   // 12
-        ProcFile.NextField(ref rest);                                             // 13 cmajflt
+        fields.Ppid = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 4
+        ProcFile.NextField(ref rest); // 5  pgrp
+        fields.SessionId = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 6  session
+        fields.TtyNr = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 7
+        ProcFile.NextField(ref rest); // 8  tpgid
+        fields.Flags = (uint)ProcFile.ParseUInt64(ProcFile.NextField(ref rest)); // 9
+        fields.MinorFaults = ProcFile.ParseUInt64(ProcFile.NextField(ref rest)); // 10
+        ProcFile.NextField(ref rest); // 11 cminflt
+        fields.MajorFaults = ProcFile.ParseUInt64(ProcFile.NextField(ref rest)); // 12
+        ProcFile.NextField(ref rest); // 13 cmajflt
         fields.UserTimeTicks = ProcFile.ParseUInt64(ProcFile.NextField(ref rest)); // 14
         fields.SystemTimeTicks = ProcFile.ParseUInt64(ProcFile.NextField(ref rest)); // 15
-        ProcFile.NextField(ref rest);                                             // 16 cutime
-        ProcFile.NextField(ref rest);                                             // 17 cstime
-        fields.Priority = ProcFile.ParseInt32(ProcFile.NextField(ref rest));       // 18
-        fields.Nice = ProcFile.ParseInt32(ProcFile.NextField(ref rest));           // 19
-        fields.NumThreads = ProcFile.ParseInt32(ProcFile.NextField(ref rest));     // 20
-        ProcFile.NextField(ref rest);                                             // 21 itrealvalue
+        ProcFile.NextField(ref rest); // 16 cutime
+        ProcFile.NextField(ref rest); // 17 cstime
+        fields.Priority = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 18
+        fields.Nice = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 19
+        fields.NumThreads = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 20
+        ProcFile.NextField(ref rest); // 21 itrealvalue
         fields.StartTimeTicks = ProcFile.ParseUInt64(ProcFile.NextField(ref rest)); // 22
-        fields.VirtualSize = ProcFile.ParseUInt64(ProcFile.NextField(ref rest));   // 23
-        fields.ResidentPages = ProcFile.ParseInt64(ProcFile.NextField(ref rest));  // 24
+        fields.VirtualSize = ProcFile.ParseUInt64(ProcFile.NextField(ref rest)); // 23
+        fields.ResidentPages = ProcFile.ParseInt64(ProcFile.NextField(ref rest)); // 24
 
         // 25..38 are limits, memory layout, and signal masks we do not surface.
         rest = ProcFile.SkipFields(rest, 14);
 
-        fields.Processor = ProcFile.ParseInt32(ProcFile.NextField(ref rest));      // 39
+        fields.Processor = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 39
         fields.RealtimePriority = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 40
-        fields.Policy = ProcFile.ParseInt32(ProcFile.NextField(ref rest));         // 41
+        fields.Policy = ProcFile.ParseInt32(ProcFile.NextField(ref rest)); // 41
 
         return true;
     }

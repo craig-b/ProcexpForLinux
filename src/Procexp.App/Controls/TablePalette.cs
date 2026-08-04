@@ -63,12 +63,19 @@ public sealed class TablePalette
             return brush;
         }
 
-        brush = new SolidColorBrush(Color.FromArgb(
-            (byte)(colour.A * 255), (byte)(colour.R * 255), (byte)(colour.G * 255), (byte)(colour.B * 255)));
+        brush = new SolidColorBrush(
+            Color.FromArgb(
+                (byte)(colour.A * 255),
+                (byte)(colour.R * 255),
+                (byte)(colour.G * 255),
+                (byte)(colour.B * 255)
+            )
+        );
 
         _rowBrushes[colour] = brush;
         return brush;
     }
 
-    private static IBrush Rgb(byte r, byte g, byte b) => new SolidColorBrush(Color.FromRgb(r, g, b));
+    private static IBrush Rgb(byte r, byte g, byte b) =>
+        new SolidColorBrush(Color.FromRgb(r, g, b));
 }

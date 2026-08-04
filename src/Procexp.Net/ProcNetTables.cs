@@ -35,7 +35,10 @@ internal static class ProcNetTables
     /// contain on the machine running them.
     /// </summary>
     internal static Dictionary<ulong, SocketInfo> ReadInetTableForTesting(
-        string path, SocketProtocol protocol, bool isTcp)
+        string path,
+        SocketProtocol protocol,
+        bool isTcp
+    )
     {
         var result = new Dictionary<ulong, SocketInfo>();
         ReadInetTable(path, protocol, isTcp, result);
@@ -47,7 +50,11 @@ internal static class ProcNetTables
     /// <c>sl local rem st tx:rx tr:when retrnsmt uid timeout inode</c>.
     /// </summary>
     private static void ReadInetTable(
-        string path, SocketProtocol protocol, bool isTcp, Dictionary<ulong, SocketInfo> into)
+        string path,
+        SocketProtocol protocol,
+        bool isTcp,
+        Dictionary<ulong, SocketInfo> into
+    )
     {
         IEnumerable<string> lines;
         try
@@ -75,13 +82,22 @@ internal static class ProcNetTables
                 continue;
             }
 
-            if (!TryParseEndpoint(fields[1], out var localAddress, out var localPort) ||
-                !TryParseEndpoint(fields[2], out var remoteAddress, out var remotePort))
+            if (
+                !TryParseEndpoint(fields[1], out var localAddress, out var localPort)
+                || !TryParseEndpoint(fields[2], out var remoteAddress, out var remotePort)
+            )
             {
                 continue;
             }
 
-            if (!byte.TryParse(fields[3], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var state))
+            if (
+                !byte.TryParse(
+                    fields[3],
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out var state
+                )
+            )
             {
                 continue;
             }
@@ -91,12 +107,26 @@ internal static class ProcNetTables
             uint? rxQueue = null;
             if (queues.Length == 2)
             {
-                if (uint.TryParse(queues[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var tx))
+                if (
+                    uint.TryParse(
+                        queues[0],
+                        NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture,
+                        out var tx
+                    )
+                )
                 {
                     txQueue = tx;
                 }
 
-                if (uint.TryParse(queues[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rx))
+                if (
+                    uint.TryParse(
+                        queues[1],
+                        NumberStyles.HexNumber,
+                        CultureInfo.InvariantCulture,
+                        out var rx
+                    )
+                )
                 {
                     rxQueue = rx;
                 }
@@ -111,7 +141,7 @@ internal static class ProcNetTables
 
             into[inode] = new SocketInfo
             {
-                Fd = -1,                    // filled in when joined to a process
+                Fd = -1, // filled in when joined to a process
                 Protocol = protocol,
                 LocalAddress = localAddress,
                 LocalPort = localPort,
@@ -150,7 +180,14 @@ internal static class ProcNetTables
         var addressHex = field.AsSpan(0, colon);
         var portHex = field.AsSpan(colon + 1);
 
-        if (!ushort.TryParse(portHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out port))
+        if (
+            !ushort.TryParse(
+                portHex,
+                NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture,
+                out port
+            )
+        )
         {
             return false;
         }
@@ -163,8 +200,14 @@ internal static class ProcNetTables
         Span<byte> bytes = stackalloc byte[addressHex.Length / 2];
         for (var i = 0; i < bytes.Length; i++)
         {
-            if (!byte.TryParse(addressHex.Slice(i * 2, 2), NumberStyles.HexNumber,
-                    CultureInfo.InvariantCulture, out bytes[i]))
+            if (
+                !byte.TryParse(
+                    addressHex.Slice(i * 2, 2),
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out bytes[i]
+                )
+            )
             {
                 return false;
             }
@@ -247,20 +290,21 @@ internal static class ProcNetTables
             }
             : "";
 
-    internal static string TcpStateName(byte state) => state switch
-    {
-        1 => "ESTABLISHED",
-        2 => "SYN_SENT",
-        3 => "SYN_RECV",
-        4 => "FIN_WAIT1",
-        5 => "FIN_WAIT2",
-        6 => "TIME_WAIT",
-        7 => "CLOSE",
-        8 => "CLOSE_WAIT",
-        9 => "LAST_ACK",
-        10 => "LISTEN",
-        11 => "CLOSING",
-        12 => "NEW_SYN_RECV",
-        _ => state.ToString(CultureInfo.InvariantCulture),
-    };
+    internal static string TcpStateName(byte state) =>
+        state switch
+        {
+            1 => "ESTABLISHED",
+            2 => "SYN_SENT",
+            3 => "SYN_RECV",
+            4 => "FIN_WAIT1",
+            5 => "FIN_WAIT2",
+            6 => "TIME_WAIT",
+            7 => "CLOSE",
+            8 => "CLOSE_WAIT",
+            9 => "LAST_ACK",
+            10 => "LISTEN",
+            11 => "CLOSING",
+            12 => "NEW_SYN_RECV",
+            _ => state.ToString(CultureInfo.InvariantCulture),
+        };
 }

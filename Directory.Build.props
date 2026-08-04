@@ -1,43 +1,41 @@
 <Project>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        <InvariantGlobalization>true</InvariantGlobalization>
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <InvariantGlobalization>true</InvariantGlobalization>
-
-    <!-- The /proc parsers work over raw UTF-8 spans and P/Invoke into libc and
+        <!-- The /proc parsers work over raw UTF-8 spans and P/Invoke into libc and
          netlink, so unsafe blocks are expected rather than exceptional. -->
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <!-- Required for IDE0005 (unused usings) to be reported during a build at
+        <!-- Required for IDE0005 (unused usings) to be reported during a build at
          all. CS1591 is suppressed with it: the point is dead usings, not a
          mandate to document every public member. -->
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
 
-    <!-- Keep the codebase publishable with Native AOT. These analysers are on
+        <!-- Keep the codebase publishable with Native AOT. These analysers are on
          everywhere, not just in the published projects, so reflection creeping
          into a library fails the build here rather than silently breaking the
          AOT build much later. TreatWarningsAsErrors above makes them fatal. -->
-    <IsAotCompatible>true</IsAotCompatible>
-    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-    <EnableAotAnalyzer>true</EnableAotAnalyzer>
-    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+        <IsAotCompatible>true</IsAotCompatible>
+        <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+        <EnableAotAnalyzer>true</EnableAotAnalyzer>
+        <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
 
-    <!-- This is a Linux-only application. Suppress the platform-compatibility
+        <!-- This is a Linux-only application. Suppress the platform-compatibility
          analyser complaining about Unix-only APIs. -->
-    <SupportedOSPlatform>linux</SupportedOSPlatform>
-    <NoWarn>$(NoWarn);CA1416</NoWarn>
-  </PropertyGroup>
+        <SupportedOSPlatform>linux</SupportedOSPlatform>
+        <NoWarn>$(NoWarn);CA1416</NoWarn>
+    </PropertyGroup>
 
-  <PropertyGroup>
-    <Product>Process Explorer for Linux</Product>
-    <Company>Sysinternals</Company>
-    <Copyright>Copyright (c) Microsoft Corporation</Copyright>
-  </PropertyGroup>
-
+    <PropertyGroup>
+        <Product>Process Explorer for Linux</Product>
+        <Company>Sysinternals</Company>
+        <Copyright>Copyright (c) Microsoft Corporation</Copyright>
+    </PropertyGroup>
 </Project>

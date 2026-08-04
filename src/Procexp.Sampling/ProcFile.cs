@@ -34,8 +34,13 @@ internal static class ProcFile
         {
             handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         }
-        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException
-                                      or UnauthorizedAccessException or IOException)
+        catch (Exception e)
+            when (e
+                    is FileNotFoundException
+                        or DirectoryNotFoundException
+                        or UnauthorizedAccessException
+                        or IOException
+            )
         {
             return false;
         }
@@ -153,7 +158,10 @@ internal static class ProcFile
     /// <c>/proc/PID/status</c>, <c>/proc/meminfo</c> and <c>/proc/PID/io</c>.
     /// Returns an empty span when the key is absent.
     /// </summary>
-    internal static ReadOnlySpan<byte> FindKeyedValue(ReadOnlySpan<byte> content, ReadOnlySpan<byte> key)
+    internal static ReadOnlySpan<byte> FindKeyedValue(
+        ReadOnlySpan<byte> content,
+        ReadOnlySpan<byte> key
+    )
     {
         while (!content.IsEmpty)
         {
@@ -164,7 +172,10 @@ internal static class ProcFile
             {
                 var value = line[(key.Length + 1)..];
                 var start = 0;
-                while (start < value.Length && (value[start] == (byte)' ' || value[start] == (byte)'\t'))
+                while (
+                    start < value.Length
+                    && (value[start] == (byte)' ' || value[start] == (byte)'\t')
+                )
                 {
                     start++;
                 }

@@ -8,7 +8,8 @@ public class AutostartProviderTests
     private static ProcessRecord Process(
         string? executablePath = null,
         string? unit = null,
-        ProcessFlags flags = ProcessFlags.None) =>
+        ProcessFlags flags = ProcessFlags.None
+    ) =>
         new()
         {
             Id = new ProcessId(4242, 1000),
@@ -24,7 +25,8 @@ public class AutostartProviderTests
         var provider = new AutostartProvider();
 
         var result = await provider.AutostartLocationAsync(
-            Process(flags: ProcessFlags.KernelThread));
+            Process(flags: ProcessFlags.KernelThread)
+        );
 
         Assert.Null(result);
     }
@@ -39,7 +41,8 @@ public class AutostartProviderTests
         var provider = new AutostartProvider();
 
         var result = await provider.AutostartLocationAsync(
-            Process(unit: "run-r92bdb60d6a9b4d5f.service"));
+            Process(unit: "run-r92bdb60d6a9b4d5f.service")
+        );
 
         Assert.NotNull(result);
         Assert.Contains("run-r92bdb60d6a9b4d5f.service", result, StringComparison.Ordinal);
@@ -51,7 +54,8 @@ public class AutostartProviderTests
         var provider = new AutostartProvider();
 
         var result = await provider.AutostartLocationAsync(
-            Process(executablePath: "/nonexistent/path/to/nothing"));
+            Process(executablePath: "/nonexistent/path/to/nothing")
+        );
 
         Assert.Null(result);
     }

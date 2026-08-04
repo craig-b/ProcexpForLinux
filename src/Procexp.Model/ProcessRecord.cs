@@ -4,18 +4,25 @@ namespace Procexp.Model;
 public enum ImageKind
 {
     Unknown,
+
     /// <summary>A desktop application with a <c>.desktop</c> entry.</summary>
     Application,
+
     /// <summary>An ordinary command-line executable.</summary>
     CommandLine,
+
     /// <summary>A systemd-managed daemon.</summary>
     Daemon,
+
     /// <summary>A kernel thread — no user-space image.</summary>
     KernelThread,
+
     /// <summary>Runs inside a Flatpak sandbox.</summary>
     Flatpak,
+
     /// <summary>Runs inside a Snap confinement.</summary>
     Snap,
+
     /// <summary>Runs inside a container (Docker, Podman, LXC).</summary>
     Container,
 }

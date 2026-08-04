@@ -95,7 +95,8 @@ public sealed record HardwareInfo
             PageSize = Environment.SystemPageSize,
             KernelVersion = ProcReader.ReadText("/proc/sys/kernel/osrelease"),
             DistributionName = ReadDistributionName(),
-            Architecture = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(),
+            Architecture =
+                System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(),
             Hostname = ProcReader.ReadText("/proc/sys/kernel/hostname"),
             BootTime = ReadBootTime(),
             Volumes = ReadVolumes(),
@@ -105,7 +106,13 @@ public sealed record HardwareInfo
     }
 
     private readonly record struct CpuFacts(
-        string Model, string? Vendor, int PhysicalCores, int Sockets, double? Mhz, IReadOnlyList<string> Flags);
+        string Model,
+        string? Vendor,
+        int PhysicalCores,
+        int Sockets,
+        double? Mhz,
+        IReadOnlyList<string> Flags
+    );
 
     /// <summary>
     /// Parse <c>/proc/cpuinfo</c>.
@@ -148,8 +155,11 @@ public sealed record HardwareInfo
                 {
                     vendor = value;
                 }
-                else if (key.SequenceEqual("cpu MHz") && mhz is null &&
-                         double.TryParse(value, CultureInfo.InvariantCulture, out var parsed))
+                else if (
+                    key.SequenceEqual("cpu MHz")
+                    && mhz is null
+                    && double.TryParse(value, CultureInfo.InvariantCulture, out var parsed)
+                )
                 {
                     mhz = parsed;
                 }
@@ -184,7 +194,8 @@ public sealed record HardwareInfo
             physicalCores.Count > 0 ? physicalCores.Count : Environment.ProcessorCount,
             sockets.Count > 0 ? sockets.Count : 1,
             mhz,
-            flags);
+            flags
+        );
     }
 
     private static double? ReadMaxFrequencyMhz()
@@ -314,15 +325,17 @@ public sealed record HardwareInfo
                     continue;
                 }
 
-                result.Add(new VolumeInfo
-                {
-                    MountPoint = drive.RootDirectory.FullName,
-                    Device = drive.Name,
-                    FileSystem = format,
-                    TotalBytes = (ulong)Math.Max(0, drive.TotalSize),
-                    AvailableBytes = (ulong)Math.Max(0, drive.AvailableFreeSpace),
-                    IsBootVolume = drive.RootDirectory.FullName == "/",
-                });
+                result.Add(
+                    new VolumeInfo
+                    {
+                        MountPoint = drive.RootDirectory.FullName,
+                        Device = drive.Name,
+                        FileSystem = format,
+                        TotalBytes = (ulong)Math.Max(0, drive.TotalSize),
+                        AvailableBytes = (ulong)Math.Max(0, drive.AvailableFreeSpace),
+                        IsBootVolume = drive.RootDirectory.FullName == "/",
+                    }
+                );
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -333,15 +346,34 @@ public sealed record HardwareInfo
         return result;
     }
 
-    private static bool IsPseudoFileSystem(string format) => format switch
-    {
-        "proc" or "sysfs" or "devtmpfs" or "devpts" or "tmpfs" or "cgroup" or
-        "cgroup2" or "securityfs" or "pstore" or "bpf" or "configfs" or
-        "debugfs" or "tracefs" or "hugetlbfs" or "mqueue" or "fusectl" or
-        "binfmt_misc" or "autofs" or "ramfs" or "efivarfs" or "squashfs" or
-        "overlay" or "nsfs" => true,
-        _ => false,
-    };
+    private static bool IsPseudoFileSystem(string format) =>
+        format switch
+        {
+            "proc"
+            or "sysfs"
+            or "devtmpfs"
+            or "devpts"
+            or "tmpfs"
+            or "cgroup"
+            or "cgroup2"
+            or "securityfs"
+            or "pstore"
+            or "bpf"
+            or "configfs"
+            or "debugfs"
+            or "tracefs"
+            or "hugetlbfs"
+            or "mqueue"
+            or "fusectl"
+            or "binfmt_misc"
+            or "autofs"
+            or "ramfs"
+            or "efivarfs"
+            or "squashfs"
+            or "overlay"
+            or "nsfs" => true,
+            _ => false,
+        };
 
     private static IReadOnlyList<NetworkInterfaceInfo> ReadNetworkInterfaces()
     {
@@ -359,25 +391,32 @@ public sealed record HardwareInfo
                         addresses.Add(address.Address.ToString());
                     }
                 }
-                catch (Exception e) when (e is PlatformNotSupportedException or NetworkInformationException)
+                catch (Exception e)
+                    when (e is PlatformNotSupportedException or NetworkInformationException)
                 {
                     // Some virtual interfaces refuse property queries.
                 }
 
                 var mac = nic.GetPhysicalAddress().ToString();
 
-                result.Add(new NetworkInterfaceInfo
-                {
-                    Name = nic.Name,
-                    MacAddress = mac.Length == 12
-                        ? string.Join(':', Enumerable.Range(0, 6).Select(i => mac.Substring(i * 2, 2)))
-                        : null,
-                    Addresses = addresses,
-                    IsUp = nic.OperationalStatus == OperationalStatus.Up,
-                    IsLoopback = nic.NetworkInterfaceType == NetworkInterfaceType.Loopback,
-                    SpeedMbps = nic.Speed > 0 ? nic.Speed / 1_000_000 : null,
-                    Mtu = ReadInterfaceMtu(nic.Name),
-                });
+                result.Add(
+                    new NetworkInterfaceInfo
+                    {
+                        Name = nic.Name,
+                        MacAddress =
+                            mac.Length == 12
+                                ? string.Join(
+                                    ':',
+                                    Enumerable.Range(0, 6).Select(i => mac.Substring(i * 2, 2))
+                                )
+                                : null,
+                        Addresses = addresses,
+                        IsUp = nic.OperationalStatus == OperationalStatus.Up,
+                        IsLoopback = nic.NetworkInterfaceType == NetworkInterfaceType.Loopback,
+                        SpeedMbps = nic.Speed > 0 ? nic.Speed / 1_000_000 : null,
+                        Mtu = ReadInterfaceMtu(nic.Name),
+                    }
+                );
             }
         }
         catch (Exception e) when (e is NetworkInformationException or PlatformNotSupportedException)
@@ -418,13 +457,18 @@ public sealed record HardwareInfo
                 var deviceId = ProcReader.ReadText(Path.Combine(device, "device"));
                 var driver = ProcFile.ReadLinkName(Path.Combine(device, "driver"));
 
-                result.Add(new GpuInfo
-                {
-                    Name = DescribeGpu(vendorId, deviceId, driver),
-                    Driver = driver,
-                    PciId = vendorId is not null && deviceId is not null ? $"{vendorId}:{deviceId}" : null,
-                    MemoryBytes = ReadGpuMemory(device),
-                });
+                result.Add(
+                    new GpuInfo
+                    {
+                        Name = DescribeGpu(vendorId, deviceId, driver),
+                        Driver = driver,
+                        PciId =
+                            vendorId is not null && deviceId is not null
+                                ? $"{vendorId}:{deviceId}"
+                                : null,
+                        MemoryBytes = ReadGpuMemory(device),
+                    }
+                );
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

@@ -42,10 +42,17 @@ public static class ElfInspector
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096);
+            using var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite,
+                4096
+            );
             return Read(stream);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception e)
+            when (e is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             return ElfFacts.NotElf;
         }
@@ -54,12 +61,19 @@ public static class ElfInspector
     private static ElfFacts Read(Stream stream)
     {
         Span<byte> header = stackalloc byte[ElfHeaderSize64];
-        if (stream.ReadAtLeast(header, ElfHeaderSize64, throwOnEndOfStream: false) < ElfHeaderSize64)
+        if (
+            stream.ReadAtLeast(header, ElfHeaderSize64, throwOnEndOfStream: false) < ElfHeaderSize64
+        )
         {
             return ElfFacts.NotElf;
         }
 
-        if (header[0] != 0x7F || header[1] != (byte)'E' || header[2] != (byte)'L' || header[3] != (byte)'F')
+        if (
+            header[0] != 0x7F
+            || header[1] != (byte)'E'
+            || header[2] != (byte)'L'
+            || header[3] != (byte)'F'
+        )
         {
             return ElfFacts.NotElf;
         }
@@ -72,7 +86,12 @@ public static class ElfInspector
         // admitting we did not look.
         if (!is64Bit || !isLittleEndian)
         {
-            return new ElfFacts { IsElf = true, Is64Bit = is64Bit, IsLittleEndian = isLittleEndian };
+            return new ElfFacts
+            {
+                IsElf = true,
+                Is64Bit = is64Bit,
+                IsLittleEndian = isLittleEndian,
+            };
         }
 
         var type = BinaryPrimitives.ReadUInt16LittleEndian(header[16..]);
@@ -80,7 +99,12 @@ public static class ElfInspector
         var programHeaderSize = BinaryPrimitives.ReadUInt16LittleEndian(header[54..]);
         var programHeaderCount = BinaryPrimitives.ReadUInt16LittleEndian(header[56..]);
 
-        var buildId = FindBuildId(stream, programHeaderOffset, programHeaderSize, programHeaderCount);
+        var buildId = FindBuildId(
+            stream,
+            programHeaderOffset,
+            programHeaderSize,
+            programHeaderCount
+        );
 
         return new ElfFacts
         {
@@ -156,7 +180,8 @@ public static class ElfInspector
         while (position + 12 <= notes.Length)
         {
             var nameSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(notes[position..]);
-            var descriptorSize = (int)BinaryPrimitives.ReadUInt32LittleEndian(notes[(position + 4)..]);
+            var descriptorSize = (int)
+                BinaryPrimitives.ReadUInt32LittleEndian(notes[(position + 4)..]);
             var type = BinaryPrimitives.ReadUInt32LittleEndian(notes[(position + 8)..]);
 
             var nameOffset = position + 12;
@@ -168,10 +193,13 @@ public static class ElfInspector
                 return null;
             }
 
-            if (type == NtGnuBuildId && nameSize >= 3 &&
-                notes[nameOffset] == (byte)'G' &&
-                notes[nameOffset + 1] == (byte)'N' &&
-                notes[nameOffset + 2] == (byte)'U')
+            if (
+                type == NtGnuBuildId
+                && nameSize >= 3
+                && notes[nameOffset] == (byte)'G'
+                && notes[nameOffset + 1] == (byte)'N'
+                && notes[nameOffset + 2] == (byte)'U'
+            )
             {
                 return Convert.ToHexStringLower(notes.Slice(descriptorOffset, descriptorSize));
             }

@@ -16,7 +16,9 @@ public sealed class AutostartProvider : IAutostartProvider
     public void Refresh() => _index.Invalidate();
 
     public ValueTask<string?> AutostartLocationAsync(
-        ProcessRecord process, CancellationToken cancellationToken = default)
+        ProcessRecord process,
+        CancellationToken cancellationToken = default
+    )
     {
         // Kernel threads are started by the kernel, not by any definition on disk.
         if (process.Flags.HasFlag(ProcessFlags.KernelThread))

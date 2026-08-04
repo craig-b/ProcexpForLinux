@@ -26,7 +26,10 @@ public sealed class ProcessListModel
     public bool HighlightNewAndDead { get; set; } = true;
 
     private readonly Dictionary<ProcessId, DateTimeOffset> _appearedAt = [];
-    private readonly Dictionary<ProcessId, (ProcessRecord Record, DateTimeOffset DiedAt)> _recentlyDead = [];
+    private readonly Dictionary<
+        ProcessId,
+        (ProcessRecord Record, DateTimeOffset DiedAt)
+    > _recentlyDead = [];
 
     private ProcessSnapshot _current = ProcessSnapshot.Empty;
     private bool _hasBaseline;
@@ -127,18 +130,22 @@ public sealed class ProcessListModel
 
     private void Expire(DateTimeOffset now)
     {
-        foreach (var id in _appearedAt
-                     .Where(e => now - e.Value > HighlightDuration)
-                     .Select(e => e.Key)
-                     .ToList())
+        foreach (
+            var id in _appearedAt
+                .Where(e => now - e.Value > HighlightDuration)
+                .Select(e => e.Key)
+                .ToList()
+        )
         {
             _appearedAt.Remove(id);
         }
 
-        foreach (var id in _recentlyDead
-                     .Where(e => now - e.Value.DiedAt > HighlightDuration)
-                     .Select(e => e.Key)
-                     .ToList())
+        foreach (
+            var id in _recentlyDead
+                .Where(e => now - e.Value.DiedAt > HighlightDuration)
+                .Select(e => e.Key)
+                .ToList()
+        )
         {
             _recentlyDead.Remove(id);
         }
@@ -147,12 +154,16 @@ public sealed class ProcessListModel
     private void Rebuild(ProcessSnapshot snapshot, DateTimeOffset now)
     {
         var displayed = new Dictionary<ProcessId, ProcessRecord>(
-            snapshot.Processes.Count + _recentlyDead.Count);
+            snapshot.Processes.Count + _recentlyDead.Count
+        );
 
         foreach (var (id, record) in snapshot.Processes)
         {
             displayed[id] = _appearedAt.ContainsKey(id)
-                ? record with { Flags = record.Flags | ProcessFlags.NewProcess }
+                ? record with
+                {
+                    Flags = record.Flags | ProcessFlags.NewProcess,
+                }
                 : record;
         }
 
@@ -160,7 +171,10 @@ public sealed class ProcessListModel
         {
             // Ghost rows keep their last known values but are marked dead, so the
             // colouring rules tint them and nothing tries to act on them.
-            displayed[id] = record with { Flags = record.Flags | ProcessFlags.DeadProcess };
+            displayed[id] = record with
+            {
+                Flags = record.Flags | ProcessFlags.DeadProcess,
+            };
         }
 
         Displayed = displayed;
@@ -183,15 +197,16 @@ public sealed class ProcessListModel
     }
 
     /// <summary>A snapshot view of what is displayed, for the row flattener.</summary>
-    public ProcessSnapshot AsSnapshot() => new()
-    {
-        Timestamp = _current.Timestamp,
-        Interval = _current.Interval,
-        Processes = Displayed,
-        Roots = Roots,
-        Children = Children,
-        System = _current.System,
-    };
+    public ProcessSnapshot AsSnapshot() =>
+        new()
+        {
+            Timestamp = _current.Timestamp,
+            Interval = _current.Interval,
+            Processes = Displayed,
+            Roots = Roots,
+            Children = Children,
+            System = _current.System,
+        };
 
     /// <summary>Whether a row refers to a process that no longer exists.</summary>
     public bool IsDead(ProcessId id) => _recentlyDead.ContainsKey(id);

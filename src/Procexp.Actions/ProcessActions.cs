@@ -92,7 +92,8 @@ public sealed partial class ProcessActions
         {
             throw new ProviderException(
                 ProviderErrorKind.ProcessGone,
-                $"pid {id.Pid} has been recycled — it now hosts a different process");
+                $"pid {id.Pid} has been recycled — it now hosts a different process"
+            );
         }
     }
 
@@ -248,9 +249,13 @@ public sealed partial class ProcessActions
         {
             Process.Start(startInfo);
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (Exception e)
+            when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            throw new ProviderException(ProviderErrorKind.Underlying, $"could not relaunch: {e.Message}");
+            throw new ProviderException(
+                ProviderErrorKind.Underlying,
+                $"could not relaunch: {e.Message}"
+            );
         }
     }
 
@@ -278,13 +283,14 @@ public sealed partial class ProcessActions
         }
     }
 
-    private static ProviderException MapErrno(int errno, ProcessId id) => errno switch
-    {
-        1 => ProviderException.NotPermitted($"not permitted to signal pid {id.Pid}"),   // EPERM
-        3 => ProviderException.ProcessGone(id),                                          // ESRCH
-        22 => ProviderException.Unsupported("invalid signal"),                           // EINVAL
-        _ => new ProviderException(ProviderErrorKind.Underlying, $"errno {errno}"),
-    };
+    private static ProviderException MapErrno(int errno, ProcessId id) =>
+        errno switch
+        {
+            1 => ProviderException.NotPermitted($"not permitted to signal pid {id.Pid}"), // EPERM
+            3 => ProviderException.ProcessGone(id), // ESRCH
+            22 => ProviderException.Unsupported("invalid signal"), // EINVAL
+            _ => new ProviderException(ProviderErrorKind.Underlying, $"errno {errno}"),
+        };
 
     private const int PrioProcess = 0;
 

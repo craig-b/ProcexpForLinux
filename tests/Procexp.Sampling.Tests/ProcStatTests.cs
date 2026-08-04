@@ -19,9 +19,9 @@ public class ProcStatTests
     /// with the process's own, which is easy to mis-count by one.
     /// </summary>
     private const string SystemdStat =
-        "1 (systemd) S 0 1 1 0 -1 4194560 45678 891011 120 340 250 830 1500 2900 20 0 1 0 " +
-        "42 24096768 3521 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 3 0 0 0 0 0 " +
-        "0 0 0 0 0 0 0 0 0";
+        "1 (systemd) S 0 1 1 0 -1 4194560 45678 891011 120 340 250 830 1500 2900 20 0 1 0 "
+        + "42 24096768 3521 18446744073709551615 1 1 0 0 0 0 671173123 4096 1260 0 0 0 17 3 0 0 0 0 0 "
+        + "0 0 0 0 0 0 0 0 0";
 
     [Fact]
     public void ParsesOrdinaryProcess()
@@ -35,7 +35,7 @@ public class ProcStatTests
         Assert.Equal(1, fields.SessionId);
         Assert.Equal(0, fields.TtyNr);
         Assert.Equal(45678UL, fields.MinorFaults);
-        Assert.Equal(120UL, fields.MajorFaults);   // not 891011, which is cminflt
+        Assert.Equal(120UL, fields.MajorFaults); // not 891011, which is cminflt
         Assert.Equal(250UL, fields.UserTimeTicks);
         Assert.Equal(830UL, fields.SystemTimeTicks);
         Assert.Equal(20, fields.Priority);
@@ -61,8 +61,8 @@ public class ProcStatTests
     public void ParsesAdversarialProcessNames(string comm, string expectedName)
     {
         var content =
-            $"4242 {comm} R 7 7 7 0 -1 0 1 2 3 4 100 200 0 0 20 0 5 0 " +
-            "999 1024 64 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 0 0";
+            $"4242 {comm} R 7 7 7 0 -1 0 1 2 3 4 100 200 0 0 20 0 5 0 "
+            + "999 1024 64 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 0 0";
 
         Assert.True(Parse(content, out var fields));
 
@@ -83,19 +83,19 @@ public class ProcStatTests
     [InlineData("")]
     [InlineData("garbage with no parens")]
     [InlineData("1 (unclosed S 0")]
-    public void RejectsMalformedInput(string content) =>
-        Assert.False(Parse(content, out _));
+    public void RejectsMalformedInput(string content) => Assert.False(Parse(content, out _));
 
     [Fact]
     public void ParsesSchedulingFieldsFromTheTail()
     {
         // Fields 39, 40, 41: processor, rt_priority, policy.
         var content =
-            "500 (worker) R 1 500 500 0 -1 0 0 0 0 0 10 20 0 0 20 0 1 0 " +
-            "1000 1024 64 " +
+            "500 (worker) R 1 500 500 0 -1 0 0 0 0 0 10 20 0 0 20 0 1 0 "
+            + "1000 1024 64 "
+            +
             // 25..38 — limits, memory layout, signal masks
-            "0 0 0 0 0 0 0 0 0 0 0 0 0 0 " +
-            "11 50 2";
+            "0 0 0 0 0 0 0 0 0 0 0 0 0 0 "
+            + "11 50 2";
 
         Assert.True(Parse(content, out var fields));
 
@@ -111,10 +111,10 @@ public class ProcStatTests
     /// </summary>
     [Theory]
     [InlineData(0, null)]
-    [InlineData(34816, "pts/0")]       // major 136, minor 0
-    [InlineData(34817, "pts/1")]       // major 136, minor 1
-    [InlineData(1025, "tty1")]         // major 4, minor 1
-    [InlineData(1088, "ttyS0")]        // major 4, minor 64
+    [InlineData(34816, "pts/0")] // major 136, minor 0
+    [InlineData(34817, "pts/1")] // major 136, minor 1
+    [InlineData(1025, "tty1")] // major 4, minor 1
+    [InlineData(1088, "ttyS0")] // major 4, minor 64
     public void DecodesTerminalDevices(int ttyNr, string? expected) =>
         Assert.Equal(expected, ProcStat.DecodeTty(ttyNr));
 }

@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>procexp-smoke</AssemblyName>
-    <RootNamespace>Procexp.Smoke</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
-    <ProjectReference Include="../Procexp.Sampling/Procexp.Sampling.csproj" />
-    <ProjectReference Include="../Procexp.SystemStats/Procexp.SystemStats.csproj" />
-    <ProjectReference Include="../Procexp.Net/Procexp.Net.csproj" />
-    <ProjectReference Include="../Procexp.Provenance/Procexp.Provenance.csproj" />
-    <ProjectReference Include="../Procexp.Autostart/Procexp.Autostart.csproj" />
-    <ProjectReference Include="../Procexp.Actions/Procexp.Actions.csproj" />
-    <ProjectReference Include="../Procexp.Gpu/Procexp.Gpu.csproj" />
-    <ProjectReference Include="../Procexp.Privileged/Procexp.Privileged.csproj" />
-  </ItemGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>procexp-smoke</AssemblyName>
+        <RootNamespace>Procexp.Smoke</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
+        <ProjectReference Include="../Procexp.Sampling/Procexp.Sampling.csproj" />
+        <ProjectReference Include="../Procexp.SystemStats/Procexp.SystemStats.csproj" />
+        <ProjectReference Include="../Procexp.Net/Procexp.Net.csproj" />
+        <ProjectReference Include="../Procexp.Provenance/Procexp.Provenance.csproj" />
+        <ProjectReference Include="../Procexp.Autostart/Procexp.Autostart.csproj" />
+        <ProjectReference Include="../Procexp.Actions/Procexp.Actions.csproj" />
+        <ProjectReference Include="../Procexp.Gpu/Procexp.Gpu.csproj" />
+        <ProjectReference Include="../Procexp.Privileged/Procexp.Privileged.csproj" />
+    </ItemGroup>
 </Project>

@@ -66,18 +66,42 @@ public sealed class ProviderException(ProviderErrorKind kind, string? message = 
 public interface IProcessDataProvider
 {
     /// <summary>A stream of snapshots produced at approximately <paramref name="interval"/>.</summary>
-    IAsyncEnumerable<ProcessSnapshot> Snapshots(TimeSpan interval, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<ProcessSnapshot> Snapshots(
+        TimeSpan interval,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>A one-shot snapshot, for tests and the initial paint.</summary>
     ValueTask<ProcessSnapshot> SnapshotAsync(CancellationToken cancellationToken = default);
 
-    ValueTask<IReadOnlyList<ThreadInfo>> ThreadsAsync(ProcessId id, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyList<ModuleInfo>> ModulesAsync(ProcessId id, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyList<FileDescriptorInfo>> FileDescriptorsAsync(ProcessId id, CancellationToken cancellationToken = default);
-    ValueTask<string?> CommandLineAsync(ProcessId id, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyDictionary<string, string>> EnvironmentAsync(ProcessId id, CancellationToken cancellationToken = default);
-    ValueTask<string?> CurrentDirectoryAsync(ProcessId id, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyList<string>> StringsAsync(ProcessId id, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<ThreadInfo>> ThreadsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
+    ValueTask<IReadOnlyList<ModuleInfo>> ModulesAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
+    ValueTask<IReadOnlyList<FileDescriptorInfo>> FileDescriptorsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
+    ValueTask<string?> CommandLineAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
+    ValueTask<IReadOnlyDictionary<string, string>> EnvironmentAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
+    ValueTask<string?> CurrentDirectoryAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
+    ValueTask<IReadOnlyList<string>> StringsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
 
     ProviderCapabilities Capabilities { get; }
 }
@@ -109,17 +133,28 @@ public interface IPrivilegedProvider : IProcessDataProvider
 /// </summary>
 public interface IProvenanceProvider
 {
-    ValueTask<ProvenanceInfo> ProvenanceAsync(string path, CancellationToken cancellationToken = default);
-    ValueTask<VirusTotalResult?> VirusTotalAsync(string sha256, CancellationToken cancellationToken = default);
+    ValueTask<ProvenanceInfo> ProvenanceAsync(
+        string path,
+        CancellationToken cancellationToken = default
+    );
+    ValueTask<VirusTotalResult?> VirusTotalAsync(
+        string sha256,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>Per-process networking.</summary>
 public interface INetworkProvider
 {
-    ValueTask<IReadOnlyList<SocketInfo>> SocketsAsync(ProcessId id, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<SocketInfo>> SocketsAsync(
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Current per-process byte rates, keyed by process.</summary>
-    ValueTask<IReadOnlyDictionary<ProcessId, ulong>> NetworkRatesAsync(CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyDictionary<ProcessId, ulong>> NetworkRatesAsync(
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>System-wide statistics.</summary>
@@ -131,14 +166,19 @@ public interface ISystemStatsProvider
 /// <summary>Resolves what caused a process to be started at boot or login.</summary>
 public interface IAutostartProvider
 {
-    ValueTask<string?> AutostartLocationAsync(ProcessRecord process, CancellationToken cancellationToken = default);
+    ValueTask<string?> AutostartLocationAsync(
+        ProcessRecord process,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>Per-process GPU usage.</summary>
 public interface IGpuProvider
 {
     /// <summary>Per-process GPU busy percentages, keyed by process.</summary>
-    ValueTask<IReadOnlyDictionary<ProcessId, double>> GpuUsageAsync(CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyDictionary<ProcessId, double>> GpuUsageAsync(
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Aggregate GPU busy percentage, or null when no GPU reports it.</summary>
     ValueTask<double?> TotalGpuPercentAsync(CancellationToken cancellationToken = default);

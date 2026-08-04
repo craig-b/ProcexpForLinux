@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- The parsers are internal because nothing outside the assembly should call
+    <ItemGroup>
+        <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <!-- The parsers are internal because nothing outside the assembly should call
          them, but they are exactly what the tests need to exercise directly. -->
-    <InternalsVisibleTo Include="Procexp.Provenance.Tests" />
-  </ItemGroup>
+        <InternalsVisibleTo Include="Procexp.Provenance.Tests" />
+    </ItemGroup>
 </Project>

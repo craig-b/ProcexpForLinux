@@ -22,7 +22,9 @@ public sealed class NetworkProvider : INetworkProvider
     private readonly Lock _dnsGate = new();
 
     public ValueTask<IReadOnlyList<SocketInfo>> SocketsAsync(
-        ProcessId id, CancellationToken cancellationToken = default)
+        ProcessId id,
+        CancellationToken cancellationToken = default
+    )
     {
         var inodes = ReadSocketInodes(id.Pid);
         if (inodes.Count == 0)
@@ -90,9 +92,15 @@ public sealed class NetworkProvider : INetworkProvider
             }
 
             var close = target.IndexOf(']');
-            if (close > 8 &&
-                ulong.TryParse(target.AsSpan(8, close - 8), NumberStyles.None,
-                    CultureInfo.InvariantCulture, out var inode))
+            if (
+                close > 8
+                && ulong.TryParse(
+                    target.AsSpan(8, close - 8),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var inode
+                )
+            )
             {
                 result.Add((fd, inode));
             }
@@ -128,9 +136,11 @@ public sealed class NetworkProvider : INetworkProvider
     /// reason, so this is parity rather than a regression.
     /// </remarks>
     public ValueTask<IReadOnlyDictionary<ProcessId, ulong>> NetworkRatesAsync(
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default
+    ) =>
         ValueTask.FromResult<IReadOnlyDictionary<ProcessId, ulong>>(
-            FrozenDictionary<ProcessId, ulong>.Empty);
+            FrozenDictionary<ProcessId, ulong>.Empty
+        );
 
     /// <summary>
     /// Resolve a remote address to a host name for the TCP/IP tab.
@@ -140,7 +150,10 @@ public sealed class NetworkProvider : INetworkProvider
     /// address otherwise costs a full DNS timeout each time. Failures are cached
     /// as the address itself so they are not retried.
     /// </remarks>
-    public async ValueTask<string> ResolveHostNameAsync(string address, CancellationToken cancellationToken = default)
+    public async ValueTask<string> ResolveHostNameAsync(
+        string address,
+        CancellationToken cancellationToken = default
+    )
     {
         lock (_dnsGate)
         {
@@ -155,14 +168,20 @@ public sealed class NetworkProvider : INetworkProvider
         {
             if (IPAddress.TryParse(address, out var ip) && !IPAddress.IsLoopback(ip))
             {
-                var entry = await Dns.GetHostEntryAsync(ip.ToString(), cancellationToken).ConfigureAwait(false);
+                var entry = await Dns.GetHostEntryAsync(ip.ToString(), cancellationToken)
+                    .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(entry.HostName))
                 {
                     resolved = entry.HostName;
                 }
             }
         }
-        catch (Exception e) when (e is System.Net.Sockets.SocketException or ArgumentException or OperationCanceledException)
+        catch (Exception e)
+            when (e
+                    is System.Net.Sockets.SocketException
+                        or ArgumentException
+                        or OperationCanceledException
+            )
         {
             // Unresolvable; cache the address so we do not pay the timeout twice.
         }

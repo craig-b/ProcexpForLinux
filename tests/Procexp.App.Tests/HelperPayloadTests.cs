@@ -41,8 +41,14 @@ public class HelperPayloadTests
             },
         ];
 
-        var json = JsonSerializer.Serialize(original, HelperJsonContext.Default.IReadOnlyListModuleInfo);
-        var restored = JsonSerializer.Deserialize(json, HelperJsonContext.Default.IReadOnlyListModuleInfo);
+        var json = JsonSerializer.Serialize(
+            original,
+            HelperJsonContext.Default.IReadOnlyListModuleInfo
+        );
+        var restored = JsonSerializer.Deserialize(
+            json,
+            HelperJsonContext.Default.IReadOnlyListModuleInfo
+        );
 
         Assert.NotNull(restored);
         Assert.Equal(2, restored.Count);
@@ -87,8 +93,14 @@ public class HelperPayloadTests
             },
         ];
 
-        var json = JsonSerializer.Serialize(original, HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo);
-        var restored = JsonSerializer.Deserialize(json, HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo);
+        var json = JsonSerializer.Serialize(
+            original,
+            HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo
+        );
+        var restored = JsonSerializer.Deserialize(
+            json,
+            HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo
+        );
 
         Assert.NotNull(restored);
         Assert.Equal(2, restored.Count);
@@ -105,9 +117,14 @@ public class HelperPayloadTests
     public void EmptyListsRoundTrip()
     {
         var json = JsonSerializer.Serialize(
-            (IReadOnlyList<ModuleInfo>)[], HelperJsonContext.Default.IReadOnlyListModuleInfo);
+            (IReadOnlyList<ModuleInfo>)[],
+            HelperJsonContext.Default.IReadOnlyListModuleInfo
+        );
 
-        var restored = JsonSerializer.Deserialize(json, HelperJsonContext.Default.IReadOnlyListModuleInfo);
+        var restored = JsonSerializer.Deserialize(
+            json,
+            HelperJsonContext.Default.IReadOnlyListModuleInfo
+        );
 
         Assert.NotNull(restored);
         Assert.Empty(restored);
@@ -143,7 +160,9 @@ public class HelperPayloadTests
 
         // Exercised through the same path the client uses.
         var restored = JsonSerializer.Deserialize(
-            "[]", HelperJsonContext.Default.IReadOnlyListModuleInfo);
+            "[]",
+            HelperJsonContext.Default.IReadOnlyListModuleInfo
+        );
 
         Assert.NotNull(restored);
     }

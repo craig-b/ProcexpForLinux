@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
+    </ItemGroup>
 </Project>

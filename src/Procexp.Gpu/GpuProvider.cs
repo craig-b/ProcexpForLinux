@@ -66,12 +66,14 @@ public sealed class GpuProvider : IGpuProvider
             {
                 if (Path.GetFileName(card).Contains('-'))
                 {
-                    continue;   // a connector, not a device
+                    continue; // a connector, not a device
                 }
 
                 var text = TryReadText(Path.Combine(card, "device", "gpu_busy_percent"));
-                if (text is not null &&
-                    double.TryParse(text, CultureInfo.InvariantCulture, out var percent))
+                if (
+                    text is not null
+                    && double.TryParse(text, CultureInfo.InvariantCulture, out var percent)
+                )
                 {
                     // Several GPUs: report the busiest, which is what the user
                     // cares about when one card is saturated.
@@ -102,8 +104,12 @@ public sealed class GpuProvider : IGpuProvider
                 var used = TryReadText(Path.Combine(card, "device", "mem_info_vram_used"));
                 var total = TryReadText(Path.Combine(card, "device", "mem_info_vram_total"));
 
-                if (used is not null && total is not null &&
-                    ulong.TryParse(used, out var usedBytes) && ulong.TryParse(total, out var totalBytes))
+                if (
+                    used is not null
+                    && total is not null
+                    && ulong.TryParse(used, out var usedBytes)
+                    && ulong.TryParse(total, out var totalBytes)
+                )
                 {
                     return (usedBytes, totalBytes);
                 }
@@ -118,11 +124,14 @@ public sealed class GpuProvider : IGpuProvider
     }
 
     public ValueTask<IReadOnlyDictionary<ProcessId, double>> GpuUsageAsync(
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(Sample().Percentages);
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(Sample().Percentages);
 
     /// <summary>Per-process GPU busy percentage and resident video memory.</summary>
-    public (IReadOnlyDictionary<ProcessId, double> Percentages, IReadOnlyDictionary<ProcessId, ulong> Memory) Sample()
+    public (
+        IReadOnlyDictionary<ProcessId, double> Percentages,
+        IReadOnlyDictionary<ProcessId, ulong> Memory
+    ) Sample()
     {
         var engineNanos = new Dictionary<ProcessId, ulong>();
         var memory = new Dictionary<ProcessId, ulong>();
@@ -137,9 +146,10 @@ public sealed class GpuProvider : IGpuProvider
 
         lock (_gate)
         {
-            var elapsedNanos = _previousTimestamp == 0
-                ? 0
-                : Stopwatch.GetElapsedTime(_previousTimestamp, now).TotalNanoseconds;
+            var elapsedNanos =
+                _previousTimestamp == 0
+                    ? 0
+                    : Stopwatch.GetElapsedTime(_previousTimestamp, now).TotalNanoseconds;
 
             if (elapsedNanos > 0)
             {
@@ -175,7 +185,10 @@ public sealed class GpuProvider : IGpuProvider
     /// descriptors reports the same cumulative totals on each, so summing them
     /// naively multiplies usage by the descriptor count.
     /// </remarks>
-    private static void Collect(Dictionary<ProcessId, ulong> engineNanos, Dictionary<ProcessId, ulong> memory)
+    private static void Collect(
+        Dictionary<ProcessId, ulong> engineNanos,
+        Dictionary<ProcessId, ulong> memory
+    )
     {
         var buffer = ArrayPool<byte>.Shared.Rent(8192);
         var seen = new HashSet<(string Device, ulong ClientId)>();

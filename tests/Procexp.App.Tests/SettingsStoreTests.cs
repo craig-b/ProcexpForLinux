@@ -37,8 +37,13 @@ public class SettingsStoreTests
     [Fact]
     public void DuplicatesAreCollapsed()
     {
-        var normalised = Columns_.Normalise(
-            [Column.Cpu, Column.Cpu, Column.Name, Column.Name, Column.WorkingSet]);
+        var normalised = Columns_.Normalise([
+            Column.Cpu,
+            Column.Cpu,
+            Column.Name,
+            Column.Name,
+            Column.WorkingSet,
+        ]);
 
         Assert.Equal(normalised.Count, normalised.Distinct().Count());
     }
@@ -50,7 +55,12 @@ public class SettingsStoreTests
     [Fact]
     public void UnsupportedColumnsAreDropped()
     {
-        var normalised = Columns_.Normalise([Column.Name, Column.Network, Column.GpuMemory, Column.Cpu]);
+        var normalised = Columns_.Normalise([
+            Column.Name,
+            Column.Network,
+            Column.GpuMemory,
+            Column.Cpu,
+        ]);
 
         Assert.DoesNotContain(Column.Network, normalised);
         Assert.DoesNotContain(Column.GpuMemory, normalised);
@@ -60,8 +70,13 @@ public class SettingsStoreTests
     [Fact]
     public void OrderOfChosenColumnsIsPreserved()
     {
-        var normalised = Columns_.Normalise(
-            [Column.Name, Column.Pid, Column.WorkingSet, Column.Cpu, Column.Threads]);
+        var normalised = Columns_.Normalise([
+            Column.Name,
+            Column.Pid,
+            Column.WorkingSet,
+            Column.Cpu,
+            Column.Threads,
+        ]);
 
         var workingSet = normalised.ToList().IndexOf(Column.WorkingSet);
         var cpu = normalised.ToList().IndexOf(Column.Cpu);
@@ -134,7 +149,10 @@ public class SettingsStoreTests
         {
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", directory);
             Directory.CreateDirectory(Path.Combine(directory, "procexp"));
-            File.WriteAllText(Path.Combine(directory, "procexp", "settings.json"), "{ \"Columns\": [ truncated");
+            File.WriteAllText(
+                Path.Combine(directory, "procexp", "settings.json"),
+                "{ \"Columns\": [ truncated"
+            );
 
             var loaded = SettingsStore.Load();
 
@@ -166,13 +184,15 @@ public class SettingsStoreTests
         {
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", directory);
 
-            SettingsStore.Save(AppSettings.Defaults with
-            {
-                RefreshSeconds = 0.0001,
-                NamePaneWidth = 99999,
-                WindowWidth = 1,
-                WindowHeight = -50,
-            });
+            SettingsStore.Save(
+                AppSettings.Defaults with
+                {
+                    RefreshSeconds = 0.0001,
+                    NamePaneWidth = 99999,
+                    WindowWidth = 1,
+                    WindowHeight = -50,
+                }
+            );
 
             var loaded = SettingsStore.Load();
 

@@ -43,7 +43,10 @@ public sealed class VirusTotalClient : IDisposable
     /// Null when no API key is configured, or when VirusTotal has never seen the
     /// file. Both are ordinary outcomes rather than errors.
     /// </returns>
-    public async ValueTask<VirusTotalResult?> ResultAsync(string sha256, CancellationToken cancellationToken = default)
+    public async ValueTask<VirusTotalResult?> ResultAsync(
+        string sha256,
+        CancellationToken cancellationToken = default
+    )
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -78,7 +81,11 @@ public sealed class VirusTotalClient : IDisposable
         }
     }
 
-    private async Task<VirusTotalResult?> FetchAsync(string sha256, string apiKey, CancellationToken cancellationToken)
+    private async Task<VirusTotalResult?> FetchAsync(
+        string sha256,
+        string apiKey,
+        CancellationToken cancellationToken
+    )
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint + sha256);
         request.Headers.Add("x-apikey", apiKey);
@@ -90,7 +97,10 @@ public sealed class VirusTotalClient : IDisposable
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
-            throw new ProviderException(ProviderErrorKind.Underlying, $"VirusTotal request failed: {e.Message}");
+            throw new ProviderException(
+                ProviderErrorKind.Underlying,
+                $"VirusTotal request failed: {e.Message}"
+            );
         }
 
         using (response)
@@ -105,19 +115,28 @@ public sealed class VirusTotalClient : IDisposable
             {
                 throw new ProviderException(
                     ProviderErrorKind.Underlying,
-                    $"VirusTotal returned {(int)response.StatusCode} {response.ReasonPhrase}");
+                    $"VirusTotal returned {(int)response.StatusCode} {response.ReasonPhrase}"
+                );
             }
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var body = await response
+                .Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
 
             VirusTotalResponse? parsed;
             try
             {
-                parsed = JsonSerializer.Deserialize(body, VirusTotalJsonContext.Default.VirusTotalResponse);
+                parsed = JsonSerializer.Deserialize(
+                    body,
+                    VirusTotalJsonContext.Default.VirusTotalResponse
+                );
             }
             catch (JsonException e)
             {
-                throw new ProviderException(ProviderErrorKind.Underlying, $"VirusTotal response was unreadable: {e.Message}");
+                throw new ProviderException(
+                    ProviderErrorKind.Underlying,
+                    $"VirusTotal response was unreadable: {e.Message}"
+                );
             }
 
             var stats = parsed?.Data?.Attributes?.LastAnalysisStats;
@@ -161,7 +180,10 @@ public sealed class VirusTotalClient : IDisposable
             }
 
             var wait = Window - (now - _requestTimes.Peek());
-            await Task.Delay(wait > TimeSpan.Zero ? wait : TimeSpan.FromMilliseconds(50), cancellationToken)
+            await Task.Delay(
+                    wait > TimeSpan.Zero ? wait : TimeSpan.FromMilliseconds(50),
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
         }
     }
@@ -201,7 +223,10 @@ public sealed class VirusTotalClient : IDisposable
     {
         var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
         var root = string.IsNullOrEmpty(xdg)
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config")
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".config"
+            )
             : xdg;
 
         return Path.Combine(root, "procexp");
@@ -213,7 +238,10 @@ public sealed class VirusTotalClient : IDisposable
         {
             var xdg = Environment.GetEnvironmentVariable("XDG_CACHE_HOME");
             var root = string.IsNullOrEmpty(xdg)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache")
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".cache"
+                )
                 : xdg;
 
             var directory = Path.Combine(root, "procexp");
@@ -243,7 +271,10 @@ public sealed class VirusTotalClient : IDisposable
         try
         {
             var json = File.ReadAllText(_cachePath);
-            var loaded = JsonSerializer.Deserialize(json, VirusTotalJsonContext.Default.DictionaryStringVirusTotalResult);
+            var loaded = JsonSerializer.Deserialize(
+                json,
+                VirusTotalJsonContext.Default.DictionaryStringVirusTotalResult
+            );
             if (loaded is not null)
             {
                 _cache = loaded;
@@ -264,7 +295,10 @@ public sealed class VirusTotalClient : IDisposable
 
         try
         {
-            var json = JsonSerializer.Serialize(_cache, VirusTotalJsonContext.Default.DictionaryStringVirusTotalResult);
+            var json = JsonSerializer.Serialize(
+                _cache,
+                VirusTotalJsonContext.Default.DictionaryStringVirusTotalResult
+            );
             File.WriteAllText(_cachePath, json);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

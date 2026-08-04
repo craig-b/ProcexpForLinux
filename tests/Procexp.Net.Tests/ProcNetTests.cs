@@ -45,7 +45,10 @@ public class ProcNetTests
     public void DecodesIpv6Loopback()
     {
         var socket = ParseSingleTcpRow(
-            "00000000000000000000000001000000:0050", "00000000000000000000000000000000:0000", "0A");
+            "00000000000000000000000001000000:0050",
+            "00000000000000000000000000000000:0000",
+            "0A"
+        );
 
         Assert.Equal("::1", socket.LocalAddress);
     }
@@ -66,8 +69,14 @@ public class ProcNetTests
     [Fact]
     public void ParsesQueuesAndUid()
     {
-        var socket = ParseSingleTcpRow("0100007F:0050", "0100007F:D431", "01",
-            queues: "0000002A:00000010", uid: "1000", inode: "987654");
+        var socket = ParseSingleTcpRow(
+            "0100007F:0050",
+            "0100007F:D431",
+            "01",
+            queues: "0000002A:00000010",
+            uid: "1000",
+            inode: "987654"
+        );
 
         Assert.Equal(0x10u, socket.ReceiveQueue);
         Assert.Equal(0x2Au, socket.SendQueue);
@@ -86,8 +95,9 @@ public class ProcNetTests
     public void SkipsRowsWithNoInode()
     {
         var table = WriteAndParse(
-            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n" +
-            "   0: 0100007F:0050 00000000:0000 06 00000000:00000000 00:00000000 00000000     0        0 0\n");
+            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+                + "   0: 0100007F:0050 00000000:0000 06 00000000:00000000 00:00000000 00000000     0        0 0\n"
+        );
 
         Assert.Empty(table);
     }
@@ -96,9 +106,10 @@ public class ProcNetTests
     public void SkipsHeaderAndMalformedRows()
     {
         var table = WriteAndParse(
-            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n" +
-            "nonsense\n" +
-            "   0: 0100007F:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 555\n");
+            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+                + "nonsense\n"
+                + "   0: 0100007F:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 555\n"
+        );
 
         Assert.Single(table);
         Assert.Equal(555UL, table.Values.Single().Inode);
@@ -112,11 +123,13 @@ public class ProcNetTests
         string state,
         string queues = "00000000:00000000",
         string uid = "0",
-        string inode = "123456")
+        string inode = "123456"
+    )
     {
         var table = WriteAndParse(
-            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n" +
-            $"   0: {local} {remote} {state} {queues} 00:00000000 00000000 {uid,5}        0 {inode}\n");
+            "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+                + $"   0: {local} {remote} {state} {queues} 00:00000000 00000000 {uid, 5}        0 {inode}\n"
+        );
 
         return Assert.Single(table).Value;
     }

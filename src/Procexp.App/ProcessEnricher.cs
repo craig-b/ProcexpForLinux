@@ -39,11 +39,9 @@ public sealed class ProcessEnricher : IDisposable
     private readonly ConcurrentDictionary<ProcessId, string?> _autostartByProcess = new();
 
     /// <summary>Per-process GPU busy, refreshed on its own slow cadence.</summary>
-    private IReadOnlyDictionary<ProcessId, double> _gpuUsage =
-        new Dictionary<ProcessId, double>();
+    private IReadOnlyDictionary<ProcessId, double> _gpuUsage = new Dictionary<ProcessId, double>();
 
-    private IReadOnlyDictionary<ProcessId, ulong> _gpuMemory =
-        new Dictionary<ProcessId, ulong>();
+    private IReadOnlyDictionary<ProcessId, ulong> _gpuMemory = new Dictionary<ProcessId, ulong>();
 
     /// <summary>Paths queued for lookup, so a path is never queried twice.</summary>
     private readonly ConcurrentDictionary<string, byte> _pending = new(StringComparer.Ordinal);
@@ -56,7 +54,8 @@ public sealed class ProcessEnricher : IDisposable
         string? Description,
         string? Company,
         string? Version,
-        ProvenanceInfo? Provenance);
+        ProvenanceInfo? Provenance
+    );
 
     public ProcessEnricher()
     {
@@ -122,7 +121,9 @@ public sealed class ProcessEnricher : IDisposable
         // would grow for the life of the session.
         if (_autostartByProcess.Count > snapshot.Processes.Count * 2)
         {
-            foreach (var id in _autostartByProcess.Keys.Where(k => !snapshot.Processes.ContainsKey(k)))
+            foreach (
+                var id in _autostartByProcess.Keys.Where(k => !snapshot.Processes.ContainsKey(k))
+            )
             {
                 _autostartByProcess.TryRemove(id, out _);
             }
@@ -154,38 +155,44 @@ public sealed class ProcessEnricher : IDisposable
             return;
         }
 
-        _ = Task.Run(async () =>
-        {
-            try
+        _ = Task.Run(
+            async () =>
             {
-                await _lookupSlots.WaitAsync(_lifetime.Token).ConfigureAwait(false);
-
                 try
                 {
-                    var info = await _provenance.ProvenanceAsync(path, _lifetime.Token).ConfigureAwait(false);
+                    await _lookupSlots.WaitAsync(_lifetime.Token).ConfigureAwait(false);
 
-                    _byPath[path] = new ImageFacts(
-                        Description: DescriptionFor(path, info),
-                        Company: info.Packager ?? info.Repository,
-                        Version: info.PackageVersion,
-                        Provenance: info);
+                    try
+                    {
+                        var info = await _provenance
+                            .ProvenanceAsync(path, _lifetime.Token)
+                            .ConfigureAwait(false);
 
-                    Updated?.Invoke(this, EventArgs.Empty);
+                        _byPath[path] = new ImageFacts(
+                            Description: DescriptionFor(path, info),
+                            Company: info.Packager ?? info.Repository,
+                            Version: info.PackageVersion,
+                            Provenance: info
+                        );
+
+                        Updated?.Invoke(this, EventArgs.Empty);
+                    }
+                    finally
+                    {
+                        _lookupSlots.Release();
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Shutting down.
                 }
                 finally
                 {
-                    _lookupSlots.Release();
+                    _pending.TryRemove(path, out _);
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                // Shutting down.
-            }
-            finally
-            {
-                _pending.TryRemove(path, out _);
-            }
-        }, CancellationToken.None);
+            },
+            CancellationToken.None
+        );
     }
 
     /// <summary>
@@ -260,25 +267,28 @@ public sealed class ProcessEnricher : IDisposable
             return;
         }
 
-        _ = Task.Run(async () =>
-        {
-            try
+        _ = Task.Run(
+            async () =>
             {
-                var location = await _autostart
-                    .AutostartLocationAsync(record, _lifetime.Token)
-                    .ConfigureAwait(false);
-
-                if (location is not null)
+                try
                 {
-                    _autostartByProcess[record.Id] = location;
-                    Updated?.Invoke(this, EventArgs.Empty);
+                    var location = await _autostart
+                        .AutostartLocationAsync(record, _lifetime.Token)
+                        .ConfigureAwait(false);
+
+                    if (location is not null)
+                    {
+                        _autostartByProcess[record.Id] = location;
+                        Updated?.Invoke(this, EventArgs.Empty);
+                    }
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                // Shutting down.
-            }
-        }, CancellationToken.None);
+                catch (OperationCanceledException)
+                {
+                    // Shutting down.
+                }
+            },
+            CancellationToken.None
+        );
     }
 
     /// <summary>
@@ -303,7 +313,8 @@ public sealed class ProcessEnricher : IDisposable
         {
             while (await timer.WaitForNextTickAsync(_lifetime.Token).ConfigureAwait(false))
             {
-                var (percentages, memory) = await Task.Run(_gpu.Sample, _lifetime.Token).ConfigureAwait(false);
+                var (percentages, memory) = await Task.Run(_gpu.Sample, _lifetime.Token)
+                    .ConfigureAwait(false);
 
                 _gpuUsage = percentages;
                 _gpuMemory = memory;

@@ -20,8 +20,12 @@ public class ProcessEnricherTests
 
     [Fact]
     public void PrefersTheResolvedExecutablePath() =>
-        Assert.Equal("/usr/bin/ls", ProcessEnricher.LookupPathFor(
-            Record(exe: "/usr/bin/ls", cmdline: "/something/else --flag")));
+        Assert.Equal(
+            "/usr/bin/ls",
+            ProcessEnricher.LookupPathFor(
+                Record(exe: "/usr/bin/ls", cmdline: "/something/else --flag")
+            )
+        );
 
     /// <summary>
     /// readlink on /proc/PID/exe is ptrace-gated, so every process owned by
@@ -31,8 +35,10 @@ public class ProcessEnricherTests
     /// </summary>
     [Fact]
     public void FallsBackToArgvZeroWhenTheExecutableIsUnreadable() =>
-        Assert.Equal("/usr/bin/ls", ProcessEnricher.LookupPathFor(
-            Record(cmdline: "/usr/bin/ls -la /tmp")));
+        Assert.Equal(
+            "/usr/bin/ls",
+            ProcessEnricher.LookupPathFor(Record(cmdline: "/usr/bin/ls -la /tmp"))
+        );
 
     [Fact]
     public void UsesTheWholeCommandLineWhenItHasNoArguments() =>
@@ -54,8 +60,7 @@ public class ProcessEnricherTests
 
     [Fact]
     public void RejectsAnAbsolutePathThatDoesNotExist() =>
-        Assert.Null(ProcessEnricher.LookupPathFor(
-            Record(cmdline: "/nonexistent/binary --flag")));
+        Assert.Null(ProcessEnricher.LookupPathFor(Record(cmdline: "/nonexistent/binary --flag")));
 
     [Fact]
     public void KernelThreadsWithNeitherYieldNothing() =>

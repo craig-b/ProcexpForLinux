@@ -46,7 +46,8 @@ own processes.
 
 ## Requirements
 
-- .NET 10 SDK to build; released binaries are self-contained and need no runtime
+- .NET 10 SDK and a C toolchain (`clang`) to build; released binaries are
+  natively compiled and need no .NET runtime at all
 - A Linux kernel exposing `/proc` (no `hidepid` restriction for full fidelity)
 
 ## Build and run
@@ -62,13 +63,19 @@ Prove the data layer against the live kernel, without a GUI:
 dotnet run --project src/Procexp.Smoke
 ```
 
-Release binaries:
+Release binaries — Native AOT, no runtime dependency:
 
 ```sh
 ./Scripts/build-release.sh
 ```
 
-See [docs/RELEASE.md](docs/RELEASE.md).
+| | Size | Startup |
+|---|---|---|
+| `procexp` | 25 MB | — |
+| `procexp-helper` | 3.6 MB | 3 ms |
+| `procexp-smoke` | 5.5 MB | 3 ms |
+
+See [docs/RELEASE.md](docs/RELEASE.md) for the measurements behind that choice.
 
 ## What needs privilege
 

@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
 #
-# Build self-contained release binaries.
+# Build native release binaries.
 #
 # Self-contained rather than framework-dependent: a system monitor is exactly the
 # tool you reach for when a machine is misbehaving, and needing a matching .NET
-# runtime installed first is a poor time to discover a dependency. The trade is
-# roughly 70 MB per binary.
+# runtime installed first is a poor time to discover a dependency.
+#
+# Native AOT rather than a single-file IL bundle. Measured on this codebase:
+#
+#             on disk    RSS     PSS    startup
+#   bundle     42 MB    314 MB  181 MB   83 ms
+#   AOT        25 MB    234 MB  101 MB    3 ms
+#
+# The startup figure matters more than it looks: the helper is spawned by systemd
+# and the smoke checker is run from scripts, so an 80 ms floor on every
+# invocation is pure overhead. AOT needs clang and a linker, which the build
+# environment must provide — see docs/RELEASE.md.
 #
 set -euo pipefail
 
@@ -24,10 +34,9 @@ publish() {
     dotnet publish "${ROOT}/src/${project}" \
         --configuration Release \
         --runtime "${RID}" \
-        --self-contained true \
-        -p:PublishSingleFile=true \
-        -p:EnableCompressionInSingleFile=true \
-        -p:DebugType=none \
+        -p:PublishAot=true \
+        -p:StripSymbols=true \
+        -p:InvariantGlobalization=true \
         --output "${OUT}/${name}" \
         --nologo
 }

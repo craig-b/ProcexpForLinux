@@ -43,8 +43,18 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Native AOT links real object code, so the runner needs a C toolchain.
+      # Without it the publish fails at the link step rather than degrading.
+      - name: Install the AOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
       - name: Build release artifacts
         run: ./Scripts/build-release.sh
+
+      # A native binary can link cleanly and still fail on first run, so prove
+      # the published artifact works rather than trusting the build.
+      - name: Verify the published binary runs
+        run: ./artifacts/procexp-smoke/procexp-smoke
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Procexp.App.Controls;
 using Procexp.Model;
 
@@ -53,11 +54,11 @@ public sealed record AppSettings
 /// </remarks>
 public static class SettingsStore
 {
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
+    // Source-generated rather than reflection-based. Reflection serialisation
+    // is the one thing in this codebase that blocks trimming and Native AOT:
+    // the trimmer cannot see which types get serialised, and AOT has no way to
+    // generate the converters at runtime.
+    private static JsonTypeInfo<AppSettings> TypeInfo => SettingsJsonContext.Default.AppSettings;
 
     public static string ConfigDirectory
     {
@@ -84,7 +85,7 @@ public static class SettingsStore
             }
 
             var json = File.ReadAllText(SettingsPath);
-            var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options);
+            var loaded = JsonSerializer.Deserialize(json, TypeInfo);
 
             return loaded is null ? AppSettings.Defaults : Sanitise(loaded);
         }
@@ -104,7 +105,7 @@ public static class SettingsStore
             // full disk mid-write cannot leave a truncated settings file that
             // fails to parse on next start.
             var temporary = SettingsPath + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(settings, Options));
+            File.WriteAllText(temporary, JsonSerializer.Serialize(settings, TypeInfo));
             File.Move(temporary, SettingsPath, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -137,6 +138,19 @@ public static class SettingsStore
         };
     }
 }
+
+/// <summary>
+/// Source-generated serialisation for the settings file.
+/// </summary>
+/// <remarks>
+/// <c>UseStringEnumConverter</c> rather than a <c>JsonStringEnumConverter</c>
+/// instance: the non-generic converter needs runtime code generation, which is
+/// precisely what Native AOT cannot do. Writing enums as names keeps the file
+/// readable and survives the numeric values being reordered.
+/// </remarks>
+[JsonSourceGenerationOptions(WriteIndented = true, UseStringEnumConverter = true)]
+[JsonSerializable(typeof(AppSettings))]
+internal sealed partial class SettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// Column list helpers.

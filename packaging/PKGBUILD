@@ -7,9 +7,9 @@ arch=('x86_64')
 url="https://github.com/microsoft/ProcexpForLinux"
 license=('MIT')
 
-# Self-contained binaries, so no runtime dependency on dotnet. The build still
-# needs the SDK.
-makedepends=('dotnet-sdk>=10.0' 'git')
+# Native AOT binaries: no runtime dependency on dotnet at all. The build needs
+# the SDK plus a C toolchain, since AOT compiles and links real object code.
+makedepends=('dotnet-sdk>=10.0' 'git' 'clang' 'lld')
 depends=('glibc')
 
 # All optional: absence degrades a column or a tab, never the app.

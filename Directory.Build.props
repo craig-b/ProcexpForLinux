@@ -13,6 +13,15 @@
          netlink, so unsafe blocks are expected rather than exceptional. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
+    <!-- Keep the codebase publishable with Native AOT. These analysers are on
+         everywhere, not just in the published projects, so reflection creeping
+         into a library fails the build here rather than silently breaking the
+         AOT build much later. TreatWarningsAsErrors above makes them fatal. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+
     <!-- This is a Linux-only application. Suppress the platform-compatibility
          analyser complaining about Unix-only APIs. -->
     <SupportedOSPlatform>linux</SupportedOSPlatform>

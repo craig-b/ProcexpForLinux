@@ -27,16 +27,71 @@ surfaces as a failed comparison rather than as a wrong number in the UI.
 Produces `artifacts/procexp-<version>-linux-x64.tar.gz` containing a staged
 filesystem tree, plus the three binaries separately.
 
-Builds are **self-contained**. A system monitor is what you reach for when a
-machine is misbehaving, and discovering you first need a matching .NET runtime is
-a poor time to find a dependency. The cost is roughly 40 MB for the app and 38 MB
-for the helper.
+### Native AOT
 
-Cross-building for another architecture:
+Builds are **self-contained and natively compiled**. Self-contained because a
+system monitor is what you reach for when a machine is misbehaving, and
+discovering you first need a matching .NET runtime is a poor time to find a
+dependency. Native AOT because it is better on every axis that matters here.
+
+Measured on this codebase, GUI application:
+
+| | Single-file IL bundle | Native AOT |
+|---|---|---|
+| On disk | 42 MB | **25 MB** |
+| Resident memory | 314 MB | **234 MB** |
+| Proportional memory | 181 MB | **101 MB** |
+
+And the console tools, where startup dominates:
+
+| | Bundle | Native AOT |
+|---|---|---|
+| `procexp-helper` on disk | 38 MB | **3.6 MB** |
+| `procexp-smoke` on disk | 38 MB | **5.5 MB** |
+| Startup to exit | 83 ms | **3.2 ms** |
+
+The startup figure matters more than the size. The helper is spawned by systemd
+and the smoke checker is run from scripts and CI, so an 80 ms floor on every
+invocation is pure overhead. Much of that floor was decompressing the single-file
+bundle on each start.
+
+Nothing had to be given up for it: the codebase was already AOT-clean apart from
+one file, because the helper protocol uses source-generated JSON and every
+P/Invoke uses the `LibraryImport` generator. Only `SettingsStore` used reflection
+serialisation, and it now uses a source-generated context too.
+
+The trim, AOT and single-file analysers are enabled for **every** project in
+`Directory.Build.props`, and warnings are errors. Reflection creeping into a
+library therefore fails the ordinary build rather than silently breaking the
+published one.
+
+### Build requirements for AOT
+
+Native AOT compiles and links real object code, so the build machine needs a C
+toolchain that `dotnet` can drive:
+
+```sh
+# Arch
+sudo pacman -S --needed clang lld
+
+# Debian / Ubuntu
+sudo apt install clang zlib1g-dev
+```
+
+If those are missing the publish fails with a linker error rather than falling
+back silently.
+
+### Cross-architecture builds
 
 ```sh
 RID=linux-arm64 ./Scripts/build-release.sh
 ```
+
+Note that Native AOT cross-compilation needs a **cross toolchain** for the target
+architecture, not just the .NET runtime pack — unlike an IL bundle, which is
+architecture-neutral until it runs. Building arm64 on an x64 host means either
+installing a cross-linker and sysroot, or building on arm64 hardware. CI does the
+latter.
 
 ## What ships where
 

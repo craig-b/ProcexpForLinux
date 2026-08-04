@@ -129,6 +129,44 @@ git tag -a v0.1.0 -m "0.1.0"
 ./Scripts/build-release.sh
 ```
 
+## Formatting and code style
+
+Two tools, split by concern.
+
+**CSharpier** owns layout — C#, XAML and MSBuild files alike. It is an
+opinionated formatter with almost nothing to configure, which is the point: no
+one argues about where a brace goes.
+
+```sh
+dotnet tool restore     # once
+dotnet csharpier format .
+dotnet csharpier check .   # what CI runs
+```
+
+**`.editorconfig`** owns everything CSharpier has no opinion about: naming,
+using ordering, `var` usage, modifier order, accessibility. Those are enforced by
+the build itself — `EnforceCodeStyleInBuild` and `TreatWarningsAsErrors` are both
+on, so a naming violation or an unused using fails the build rather than
+appearing as a suggestion in an IDE.
+
+Two configuration traps are worth knowing, because both fail silently:
+
+- A `dotnet_naming_rule` severity does **not** enable the rule. Without an
+  explicit `dotnet_diagnostic.IDE1006.severity` the entire naming section is
+  ignored at build time.
+- `IDE0005` (unused usings) only reports during a build when
+  `GenerateDocumentationFile` is on.
+
+Both are handled in `.editorconfig` and `Directory.Build.props`. If you add
+style rules, verify them by building deliberately bad code — the configuration
+will not tell you it is being ignored.
+
+Run this once so `git blame` skips the reformat commit:
+
+```sh
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
 ## CI
 
 `.github/workflows/ci.yml` builds, tests, runs the smoke checker against the

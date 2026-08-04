@@ -189,18 +189,19 @@ public class ContractTests
     }
 
     /// <summary>
-    /// Network and GPU are unsupported on macOS but genuinely available here, via
-    /// netlink sock_diag and DRM fdinfo respectively. Only GPU memory stays
-    /// unsupported, since only some DRM drivers report it.
+    /// GPU is unsupported on macOS but available here through DRM fdinfo.
+    /// Network is not: Linux has no per-process byte counter, so the column stays
+    /// unsupported exactly as it is on macOS. Sockets still enumerate — it is only
+    /// the rate that has no source.
     /// </summary>
     [Fact]
-    public void SupportedColumns_IncludeNetworkAndGpu()
+    public void SupportedColumns_IncludeGpuButNotNetworkRate()
     {
         var supported = Columns.Supported.ToHashSet();
 
-        Assert.Contains(Column.Network, supported);
         Assert.Contains(Column.Gpu, supported);
         Assert.Contains(Column.CommandLine, supported);
+        Assert.DoesNotContain(Column.Network, supported);
         Assert.DoesNotContain(Column.GpuMemory, supported);
     }
 

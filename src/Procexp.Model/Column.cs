@@ -221,12 +221,19 @@ public static class Columns
     /// active column sets.
     /// </summary>
     /// <remarks>
-    /// Note that Network and GPU <em>are</em> supported here, unlike the macOS
-    /// build which cannot source them: per-process network comes from netlink
-    /// sock_diag and per-process GPU from DRM fdinfo. Only GPU memory remains
-    /// unsupported, since only some DRM drivers report it.
+    /// Per-process GPU <em>is</em> supported here, unlike the macOS build, since
+    /// DRM fdinfo reports per-process engine busy time.
+    ///
+    /// Network is not. Linux exposes no per-process byte counter:
+    /// <c>/proc/PID/net/dev</c> reports network-namespace totals, so every
+    /// process outside a container would show identical host-wide figures.
+    /// Sockets themselves enumerate fine and drive the TCP/IP tab — it is only
+    /// the byte rate that has no unprivileged source. See NetworkProvider for the
+    /// two routes that could supply it.
+    ///
+    /// GPU memory stays unsupported because only some DRM drivers report it.
     /// </remarks>
-    public static bool IsSupported(Column c) => c != Column.GpuMemory;
+    public static bool IsSupported(Column c) => c is not (Column.GpuMemory or Column.Network);
 
     public static IEnumerable<Column> Supported => All.Where(IsSupported);
 

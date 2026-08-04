@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Procexp.Model;
 using Procexp.Sampling;
+using Procexp.Net;
 using Procexp.SystemStats;
 
 // Headless smoke-checker for the data layer, mirroring Sources/ProcexpSmoke in
@@ -188,6 +189,81 @@ Check("services name their unit", services.Any(p => p.SystemdUnit is not null),
 var kernelThreads = snapshot.Processes.Values.Where(p => p.Flags.HasFlag(ProcessFlags.KernelThread)).ToList();
 Check("kernel threads detected", kernelThreads.Count > 0, $"{kernelThreads.Count} kernel threads");
 Check("kernel threads have no image", kernelThreads.All(p => p.ExecutablePath is null));
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nSockets");
+// ---------------------------------------------------------------------------
+
+var network = new NetworkProvider();
+
+// Find a process that actually holds sockets. Our own may hold none, so scan.
+var withSockets = new List<(ProcessRecord Process, IReadOnlyList<SocketInfo> Sockets)>();
+foreach (var candidate in snapshot.Processes.Values.Where(p => !p.Flags.HasFlag(ProcessFlags.KernelThread)))
+{
+    var sockets = await network.SocketsAsync(candidate.Id);
+    if (sockets.Count > 0)
+    {
+        withSockets.Add((candidate, sockets));
+    }
+}
+
+Check("sockets found across processes", withSockets.Count > 0,
+    $"{withSockets.Count} processes holding {withSockets.Sum(w => w.Sockets.Count)} sockets");
+
+var allSockets = withSockets.SelectMany(w => w.Sockets).ToList();
+Check("sockets carry an inode", allSockets.All(s => s.Inode > 0));
+Check("sockets map back to a descriptor", allSockets.All(s => s.Fd >= 0));
+
+var tcp = allSockets.Where(s => s.Protocol is SocketProtocol.Tcp or SocketProtocol.Tcp6).ToList();
+Check("TCP sockets present", tcp.Count > 0, $"{tcp.Count} TCP sockets");
+Check("TCP states decode", tcp.All(s => s.State.Length > 0) && tcp.Any(s => s.State == "ESTABLISHED" || s.State == "LISTEN"));
+Check("listening sockets have a local port", tcp.Where(s => s.State == "LISTEN").All(s => s.LocalPort > 0));
+Check("addresses parse as valid IPs",
+    tcp.All(s => System.Net.IPAddress.TryParse(s.LocalAddress, out _)));
+
+// 127.0.0.1 is stored as 0100007F on a little-endian machine, so a loopback
+// listener proves the word-swap is right rather than accidentally symmetric.
+var loopback = tcp.FirstOrDefault(s => s.LocalAddress == "127.0.0.1");
+Check("little-endian address decoding is correct", loopback is not null || tcp.Count == 0,
+    loopback is null ? "no loopback listener to check" : $"{loopback.LocalAddress}:{loopback.LocalPort}");
+
+var unix = allSockets.Where(s => s.Protocol == SocketProtocol.Unix).ToList();
+Check("unix sockets present", unix.Count > 0, $"{unix.Count} unix sockets");
+
+// Cross-check the listening TCP port set against ss.
+var ssOutput = RunCommand("ss", "-ltn");
+if (ssOutput is not null)
+{
+    var ssPorts = ssOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        .Skip(1)
+        .Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        .Where(f => f.Length > 3)
+        .Select(f => f[3].LastIndexOf(':') is var i && i >= 0 && ushort.TryParse(f[3][(i + 1)..], out var p) ? p : (ushort)0)
+        .Where(p => p > 0)
+        .ToHashSet();
+
+    var ourPorts = tcp.Where(s => s.State == "LISTEN").Select(s => s.LocalPort).ToHashSet();
+    var missing = ssPorts.Except(ourPorts).ToList();
+
+    // ss sees every listener; we only see those owned by processes whose fd
+    // directory we can read, so a subset is expected as a non-root user.
+    Check("listening ports are a subset of ss", missing.Count < ssPorts.Count || ssPorts.Count == 0,
+        $"ours {ourPorts.Count}, ss {ssPorts.Count}");
+}
+
+var rates = await network.NetworkRatesAsync();
+Check("per-process rates are empty by design", rates.Count == 0,
+    "Linux exposes no per-process byte counter — see NetworkProvider");
+Check("Network column is marked unsupported", !Columns.IsSupported(Column.Network));
+
+Console.WriteLine("\n  Sample sockets:");
+foreach (var (process, sockets) in withSockets.OrderByDescending(w => w.Sockets.Count).Take(4))
+{
+    var socket = sockets[0];
+    Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+        $"    {Truncate(process.Name, 20),-20} {sockets.Count,3} sockets   " +
+        $"{socket.Protocol,-5} {socket.LocalAddress}:{socket.LocalPort} {socket.State}"));
+}
 
 // ---------------------------------------------------------------------------
 Console.WriteLine("\nSystem statistics");

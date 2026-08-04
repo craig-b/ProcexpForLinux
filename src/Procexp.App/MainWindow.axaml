@@ -29,6 +29,14 @@
         <MenuItem Name="MenuTreeMode" Header="Show Process _Tree"
                   ToggleType="CheckBox" IsChecked="True" InputGesture="Ctrl+T" />
         <Separator />
+        <MenuItem Name="MenuLowerPane" Header="Show _Lower Pane"
+                  ToggleType="CheckBox" IsChecked="True" InputGesture="Ctrl+L" />
+        <MenuItem Header="Lower Pane _View">
+          <MenuItem Name="MenuPaneModules" Header="_Mapped Files" ToggleType="Radio" GroupName="Pane" IsChecked="True" />
+          <MenuItem Name="MenuPaneHandles" Header="_Handles" ToggleType="Radio" GroupName="Pane" />
+          <MenuItem Name="MenuPaneThreads" Header="_Threads" ToggleType="Radio" GroupName="Pane" />
+        </MenuItem>
+        <Separator />
         <MenuItem Header="Update _Speed">
           <MenuItem Name="MenuSpeedFast" Header="_Fast (0.5 s)" ToggleType="Radio" GroupName="Speed" />
           <MenuItem Name="MenuSpeedNormal" Header="_Normal (1 s)" ToggleType="Radio" GroupName="Speed" IsChecked="True" />
@@ -76,10 +84,18 @@
         <Button Name="SuspendButton" Content="Suspend" MinWidth="80" />
         <Rectangle Width="1" Margin="4,2" Fill="#40808080" />
         <ToggleSwitch Name="TreeToggle" IsChecked="True" OnContent="Tree" OffContent="Flat" MinWidth="90" />
+        <Rectangle Width="1" Margin="4,2" Fill="#40808080" />
+        <ComboBox Name="PaneModeCombo" SelectedIndex="0" MinWidth="130" />
+        <ToggleButton Name="LowerPaneToggle" Content="Lower Pane" IsChecked="True" MinWidth="100" />
       </StackPanel>
     </Border>
 
-    <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+    <!-- Upper and lower panes, split by a draggable divider. The lower pane's
+         height is the user's to choose, so the row is sized in stars and simply
+         collapsed to zero when the pane is hidden. -->
+    <Grid Name="PaneSplit" RowDefinitions="3*,Auto,2*">
+
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
       <controls:ProcessTreeView Name="Tree" Grid.Row="0" Grid.Column="0">
         <controls:ProcessTreeView.ContextMenu>
           <ContextMenu Name="RowMenu">
@@ -107,6 +123,12 @@
         <ScrollBar Name="HorizontalScroll" Grid.Column="1"
                    Orientation="Horizontal" Visibility="Visible" />
       </Grid>
+    </Grid>
+
+      <GridSplitter Name="PaneSplitter" Grid.Row="1" Height="5"
+                    ResizeDirection="Rows" Background="#20808080" />
+
+      <ContentControl Name="LowerPaneHost" Grid.Row="2" />
     </Grid>
 
   </DockPanel>

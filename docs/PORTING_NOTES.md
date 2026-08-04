@@ -41,10 +41,30 @@ table is the working reference for the sampling engine.
 
 | View | macOS | Linux |
 |---|---|---|
-| Modules / images | `proc_regionwithpathinfo` walk | `/proc/PID/maps`, file-backed entries |
-| Handles / fds | `proc_pidfdinfo` | `/proc/PID/fd/*` symlinks + `/proc/PID/fdinfo/*` |
+| Modules / images | `proc_regionwithpathinfo` walk | `/proc/PID/maps` — **owner only** |
+| Handles / fds | `proc_pidfdinfo` | `/proc/PID/fd/*` + `fdinfo/*` — **owner only** |
 | Threads | `task_threads` — **needs task port** | `/proc/PID/task/*/stat`, `comm`, `wchan` — **unprivileged** |
 | Sockets | `proc_pidfdinfo(SOCKETINFO)` | netlink `sock_diag`, joined to fd socket inodes |
+
+### The `ptrace_may_access` gate
+
+Most of `/proc` is world-readable, but not all of it. `maps`, `fd`, `fdinfo`,
+`environ`, `io`, `smaps_rollup`, `stack` and `syscall` are gated by
+`ptrace_may_access`, so they are readable only by the process owner (or with
+`CAP_SYS_PTRACE`). Measured on a running system:
+
+| Path | Own process | Another user's |
+|---|---|---|
+| `stat`, `status`, `cmdline`, `cgroup`, `comm` | yes | **yes** |
+| `task/*/stat`, `task/*/wchan` | yes | **yes** |
+| `maps`, `fd`, `fdinfo` | yes | **no** |
+| `io`, `smaps_rollup`, `environ` | yes | **no** |
+
+The threads win is real and survives this: the whole thread list, including
+per-thread CPU and wait channel, reads cross-user. Modules and handles do not,
+which is the same restriction macOS applies — so the lower pane must report
+"not permitted" rather than an empty list, and the helper's remit covers `maps`
+and `fd` as well as the three files originally identified.
 
 ## System-wide
 
@@ -82,6 +102,8 @@ cron.
 
 ## What still needs privilege
 
-Only three per-process files are owner-restricted: `io`, `smaps_rollup` and
-`environ`. That is the entire remaining justification for the helper daemon,
-versus the substantial XPC subsystem the macOS version requires.
+Everything behind the `ptrace_may_access` gate above: `io`, `smaps_rollup`,
+`environ`, `maps`, `fd` and `fdinfo`. That is the remaining justification for the
+helper daemon — still far less than the XPC subsystem the macOS version needs,
+since the process list, the tree, command lines and the entire thread view all
+work unprivileged.

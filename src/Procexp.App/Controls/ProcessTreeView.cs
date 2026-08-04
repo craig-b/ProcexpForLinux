@@ -1,6 +1,4 @@
-using System.Globalization;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Procexp.Model;
@@ -17,100 +15,38 @@ namespace Procexp.App.Controls;
 /// no stock control produces this layout. The defining behaviour is that the
 /// process-name column stays put while the metric columns scroll horizontally
 /// under their own scrollbar, with both halves sharing one vertical scroll.
-///
-/// Cost is governed by how many rows are visible, not by how many exist. At a
-/// typical window size that is around 40 rows regardless of whether the machine
-/// is running 600 processes or 6,000.
 /// </remarks>
-public sealed class ProcessTreeView : Control
+public sealed class ProcessTreeView : VirtualTableBase
 {
-    private const double RowHeight = 20;
-    private const double HeaderHeight = 24;
     private const double IndentPerLevel = 14;
     private const double ExpanderSize = 9;
-    private const double CellPadding = 6;
-
-    private readonly Typeface _typeface = new(FontFamily.Default);
-    private readonly Typeface _boldTypeface = new(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold);
-
-    private readonly FormattedTextCache _textCache;
-    private readonly FormattedTextCache _headerTextCache;
-
-    // Brushes are held rather than rebuilt per access. Constructing a
-    // SolidColorBrush per cell is cheap individually and not cheap several
-    // hundred times a frame.
-    private readonly Dictionary<Rgba, IBrush> _rowBrushes = [];
 
     private IReadOnlyList<VisibleRow> _rows = [];
     private IReadOnlyList<(Column Column, double Width)> _columns = [];
 
-    private double _verticalOffset;
-    private double _horizontalOffset;
-    private int _selectedIndex = -1;
-
     /// <summary>Width of the frozen pane, including the tree indent area.</summary>
     public double NamePaneWidth { get; set; } = 260;
 
-    public bool IsDarkMode { get; set; }
-
     public IReadOnlyList<ProcessColorRule> ColorRules { get; set; } = ProcessColorRule.Defaults;
-
-    public event EventHandler<ProcessRecord?>? SelectionChanged;
-    public event EventHandler<ProcessId>? ToggleRequested;
-    public event EventHandler<Column>? HeaderClicked;
 
     public Column SortColumn { get; set; } = Column.Cpu;
     public bool SortDescending { get; set; } = true;
 
-    public ProcessTreeView()
-    {
-        Focusable = true;
-        ClipToBounds = true;
+    public event EventHandler<ProcessId>? ToggleRequested;
+    public event EventHandler<Column>? HeaderClicked;
 
-        _textCache = new FormattedTextCache(_typeface, 12);
-        _headerTextCache = new FormattedTextCache(_boldTypeface, 12);
-    }
+    protected override int RowCount => _rows.Count;
+
+    protected override double FrozenWidth => NamePaneWidth;
+
+    protected override double ScrollableWidth => _columns.Skip(1).Sum(c => c.Width);
+
+    public double MetricsExtentWidth => ScrollableWidth;
+
+    public double MetricsViewportWidth => ScrollableViewportWidth;
 
     public ProcessRecord? SelectedProcess =>
-        _selectedIndex >= 0 && _selectedIndex < _rows.Count ? _rows[_selectedIndex].Process : null;
-
-    /// <summary>Total scrollable height, for the vertical scrollbar.</summary>
-    public double ExtentHeight => _rows.Count * RowHeight;
-
-    /// <summary>Total width of the metric columns, for the horizontal scrollbar.</summary>
-    public double MetricsExtentWidth => _columns.Skip(1).Sum(c => c.Width);
-
-    public double ViewportHeight => Math.Max(0, Bounds.Height - HeaderHeight);
-
-    public double MetricsViewportWidth => Math.Max(0, Bounds.Width - NamePaneWidth);
-
-    public double VerticalOffset
-    {
-        get => _verticalOffset;
-        set
-        {
-            var clamped = Math.Clamp(value, 0, Math.Max(0, ExtentHeight - ViewportHeight));
-            if (Math.Abs(clamped - _verticalOffset) > 0.01)
-            {
-                _verticalOffset = clamped;
-                InvalidateVisual();
-            }
-        }
-    }
-
-    public double HorizontalOffset
-    {
-        get => _horizontalOffset;
-        set
-        {
-            var clamped = Math.Clamp(value, 0, Math.Max(0, MetricsExtentWidth - MetricsViewportWidth));
-            if (Math.Abs(clamped - _horizontalOffset) > 0.01)
-            {
-                _horizontalOffset = clamped;
-                InvalidateVisual();
-            }
-        }
-    }
+        SelectedIndex >= 0 && SelectedIndex < _rows.Count ? _rows[SelectedIndex].Process : null;
 
     /// <summary>
     /// Replace the displayed rows.
@@ -130,74 +66,43 @@ public sealed class ProcessTreeView : Control
 
         if (previouslySelected is { } id)
         {
-            _selectedIndex = -1;
+            var index = -1;
             for (var i = 0; i < rows.Count; i++)
             {
                 if (rows[i].Process.Id == id)
                 {
-                    _selectedIndex = i;
+                    index = i;
                     break;
                 }
             }
+
+            RestoreSelectedIndex(index);
         }
 
-        // Rows may have gone away beneath the current offset.
-        _verticalOffset = Math.Clamp(_verticalOffset, 0, Math.Max(0, ExtentHeight - ViewportHeight));
+        else if (rows.Count > 0)
+        {
+            // Start with the first row selected. The lower pane and the Process
+            // menu are both inert without a selection, so opening to none makes
+            // the window look broken until the user guesses to click something.
+            SelectFirstRow();
+        }
 
+        ClampScrollAfterRowChange();
         InvalidateVisual();
     }
 
+    private void SelectFirstRow() => SetSelectedIndex(0);
+
     // ---- Rendering ----------------------------------------------------------
 
-    /// <summary>
-    /// Rolling average paint time. Exposed so the shell can show it, and because
-    /// proving this stays flat as the process count grows is the whole point of
-    /// drawing the table by hand.
-    /// </summary>
-    public double AverageRenderMilliseconds =>
-        _renderTimes.Count == 0 ? 0 : _renderTimes.Average();
-
-    /// <summary>Rows actually painted in the last frame, as opposed to rows held.</summary>
-    public int LastRenderedRowCount { get; private set; }
-
-    private readonly Queue<double> _renderTimes = new();
-
-    public override void Render(DrawingContext context)
+    protected override void RenderCore(DrawingContext context, int firstRow, int lastRow)
     {
-        var watch = System.Diagnostics.Stopwatch.StartNew();
+        // Metric columns draw into a clipped, translated region so they scroll
+        // under the frozen pane rather than over it.
+        var metrics = new Rect(NamePaneWidth, 0, ScrollableViewportWidth, Bounds.Height);
 
-        _textCache.BeginFrame();
-        _headerTextCache.BeginFrame();
-
-        RenderCore(context);
-
-        _renderTimes.Enqueue(watch.Elapsed.TotalMilliseconds);
-        while (_renderTimes.Count > 30)
-        {
-            _renderTimes.Dequeue();
-        }
-    }
-
-    private void RenderCore(DrawingContext context)
-    {
-        var bounds = new Rect(Bounds.Size);
-        context.FillRectangle(Background, bounds);
-
-        if (_columns.Count == 0)
-        {
-            return;
-        }
-
-        var firstRow = Math.Max(0, (int)(_verticalOffset / RowHeight));
-        var lastRow = Math.Min(_rows.Count - 1, (int)((_verticalOffset + ViewportHeight) / RowHeight) + 1);
-        LastRenderedRowCount = Math.Max(0, lastRow - firstRow + 1);
-
-        // The metric columns are drawn into a clipped, translated region so they
-        // scroll under the frozen pane rather than over it.
-        var metricsRegion = new Rect(NamePaneWidth, 0, MetricsViewportWidth, Bounds.Height);
-
-        using (context.PushClip(metricsRegion))
-        using (context.PushTransform(Matrix.CreateTranslation(NamePaneWidth - _horizontalOffset, 0)))
+        using (context.PushClip(metrics))
+        using (context.PushTransform(Matrix.CreateTranslation(NamePaneWidth - HorizontalOffset, 0)))
         {
             RenderMetricRows(context, firstRow, lastRow);
             RenderMetricHeaders(context);
@@ -210,9 +115,9 @@ public sealed class ProcessTreeView : Control
             RenderNameHeader(context);
         }
 
-        // The divider marks where the frozen pane ends, which is otherwise
-        // ambiguous once the metrics are scrolled.
-        context.DrawLine(DividerPen, new Point(NamePaneWidth, 0), new Point(NamePaneWidth, Bounds.Height));
+        // The divider marks where the frozen pane ends, otherwise ambiguous once
+        // the metrics are scrolled.
+        context.DrawLine(Palette.Divider, new Point(NamePaneWidth, 0), new Point(NamePaneWidth, Bounds.Height));
     }
 
     private void RenderNameRows(DrawingContext context, int firstRow, int lastRow)
@@ -220,10 +125,9 @@ public sealed class ProcessTreeView : Control
         for (var i = firstRow; i <= lastRow; i++)
         {
             var row = _rows[i];
-            var y = HeaderHeight + (i * RowHeight) - _verticalOffset;
+            var y = RowTop(i);
 
-            var rowRect = new Rect(0, y, NamePaneWidth, RowHeight);
-            DrawRowBackground(context, rowRect, row, i);
+            DrawRowBackground(context, new Rect(0, y, NamePaneWidth, RowHeight), i, RuleBrush(row));
 
             var indent = CellPadding + (row.Depth * IndentPerLevel);
 
@@ -233,12 +137,12 @@ public sealed class ProcessTreeView : Control
             }
 
             var textLeft = indent + ExpanderSize + 6;
-            DrawText(
+            DrawCell(
                 context,
                 row.Process.Name,
                 new Rect(textLeft, y, Math.Max(0, NamePaneWidth - textLeft - CellPadding), RowHeight),
                 rightAligned: false,
-                selected: i == _selectedIndex);
+                selected: i == SelectedIndex);
         }
     }
 
@@ -247,28 +151,28 @@ public sealed class ProcessTreeView : Control
         for (var i = firstRow; i <= lastRow; i++)
         {
             var row = _rows[i];
-            var y = HeaderHeight + (i * RowHeight) - _verticalOffset;
+            var y = RowTop(i);
 
-            DrawRowBackground(context, new Rect(0, y, MetricsExtentWidth, RowHeight), row, i);
+            DrawRowBackground(context, new Rect(0, y, ScrollableWidth, RowHeight), i, RuleBrush(row));
 
             double x = 0;
             for (var c = 1; c < _columns.Count; c++)
             {
                 var (column, width) = _columns[c];
 
-                // Skip columns scrolled entirely out of view. With twenty-odd
-                // columns configured this is most of them.
-                if (x + width >= _horizontalOffset && x <= _horizontalOffset + MetricsViewportWidth)
+                // Skip columns scrolled out of view. With twenty-odd configured
+                // that is most of them.
+                if (x + width >= HorizontalOffset && x <= HorizontalOffset + ScrollableViewportWidth)
                 {
                     var text = Columns.Format(column, row.Process);
                     if (text.Length > 0)
                     {
-                        DrawText(
+                        DrawCell(
                             context,
                             text,
                             new Rect(x + CellPadding, y, Math.Max(0, width - (CellPadding * 2)), RowHeight),
                             Columns.IsRightAligned(column),
-                            i == _selectedIndex);
+                            i == SelectedIndex);
                     }
                 }
 
@@ -277,73 +181,58 @@ public sealed class ProcessTreeView : Control
         }
     }
 
+    private IBrush? RuleBrush(VisibleRow row)
+    {
+        var colour = ProcessColorRule.Background(row.Process.Flags, ColorRules, IsDarkMode);
+        return colour is { } rgba ? Palette.RowBrush(rgba) : null;
+    }
+
     private void RenderNameHeader(DrawingContext context)
     {
-        var rect = new Rect(0, 0, NamePaneWidth, HeaderHeight);
-        context.FillRectangle(HeaderBackground, rect);
-        context.DrawLine(DividerPen, new Point(0, HeaderHeight), new Point(NamePaneWidth, HeaderHeight));
+        context.FillRectangle(Palette.HeaderBackground, new Rect(0, 0, NamePaneWidth, HeaderHeight));
+        context.DrawLine(Palette.Divider, new Point(0, HeaderHeight), new Point(NamePaneWidth, HeaderHeight));
 
-        DrawHeaderText(context, Columns.Title(Column.Name), new Rect(CellPadding, 0, NamePaneWidth, HeaderHeight),
-            rightAligned: false, isSortColumn: SortColumn == Column.Name);
+        DrawHeaderCell(
+            context,
+            Label(Column.Name),
+            new Rect(CellPadding, 0, NamePaneWidth - (CellPadding * 2), HeaderHeight),
+            rightAligned: false);
     }
 
     private void RenderMetricHeaders(DrawingContext context)
     {
-        context.FillRectangle(HeaderBackground, new Rect(0, 0, MetricsExtentWidth, HeaderHeight));
-        context.DrawLine(DividerPen, new Point(0, HeaderHeight), new Point(MetricsExtentWidth, HeaderHeight));
+        context.FillRectangle(Palette.HeaderBackground, new Rect(0, 0, ScrollableWidth, HeaderHeight));
+        context.DrawLine(Palette.Divider, new Point(0, HeaderHeight), new Point(ScrollableWidth, HeaderHeight));
 
         double x = 0;
         for (var c = 1; c < _columns.Count; c++)
         {
             var (column, width) = _columns[c];
 
-            if (x + width >= _horizontalOffset && x <= _horizontalOffset + MetricsViewportWidth)
+            if (x + width >= HorizontalOffset && x <= HorizontalOffset + ScrollableViewportWidth)
             {
-                DrawHeaderText(
+                DrawHeaderCell(
                     context,
-                    Columns.Title(column),
+                    Label(column),
                     new Rect(x + CellPadding, 0, Math.Max(0, width - (CellPadding * 2)), HeaderHeight),
-                    Columns.IsRightAligned(column),
-                    SortColumn == column);
+                    Columns.IsRightAligned(column));
 
-                context.DrawLine(DividerPen, new Point(x + width, 0), new Point(x + width, HeaderHeight));
+                context.DrawLine(Palette.Divider, new Point(x + width, 0), new Point(x + width, HeaderHeight));
             }
 
             x += width;
         }
     }
 
-    private void DrawRowBackground(DrawingContext context, Rect rect, VisibleRow row, int index)
-    {
-        if (index == _selectedIndex)
-        {
-            context.FillRectangle(SelectionBrush, rect);
-            return;
-        }
-
-        var colour = ProcessColorRule.Background(row.Process.Flags, ColorRules, IsDarkMode);
-        if (colour is { } rgba)
-        {
-            if (!_rowBrushes.TryGetValue(rgba, out var brush))
-            {
-                brush = new SolidColorBrush(Color.FromArgb(
-                    (byte)(rgba.A * 255), (byte)(rgba.R * 255), (byte)(rgba.G * 255), (byte)(rgba.B * 255)));
-                _rowBrushes[rgba] = brush;
-            }
-
-            context.FillRectangle(brush, rect);
-        }
-        else if (index % 2 == 1)
-        {
-            context.FillRectangle(AlternateRowBrush, rect);
-        }
-    }
+    private string Label(Column column) =>
+        SortColumn == column
+            ? $"{Columns.Title(column)} {(SortDescending ? "▾" : "▴")}"
+            : Columns.Title(column);
 
     private void DrawExpander(DrawingContext context, Point centre, bool expanded)
     {
         var half = ExpanderSize / 2;
 
-        // A filled triangle, pointing down when expanded and right when not.
         var geometry = new StreamGeometry();
         using (var sink = geometry.Open())
         {
@@ -363,40 +252,14 @@ public sealed class ProcessTreeView : Control
             sink.EndFigure(true);
         }
 
-        context.DrawGeometry(ExpanderBrush, null, geometry);
+        context.DrawGeometry(Palette.Expander, null, geometry);
     }
 
-    private void DrawText(DrawingContext context, string text, Rect rect, bool rightAligned, bool selected)
-    {
-        if (rect.Width <= 1 || text.Length == 0)
-        {
-            return;
-        }
-
-        var formatted = _textCache.Get(
-            text, rect.Width, selected ? SelectedTextBrush : TextBrush, emphasised: false, selected);
-
-        var x = rightAligned ? rect.Right - Math.Min(formatted.Width, rect.Width) : rect.X;
-        context.DrawText(formatted, new Point(x, rect.Y + ((RowHeight - formatted.Height) / 2)));
-    }
-
-    private void DrawHeaderText(DrawingContext context, string text, Rect rect, bool rightAligned, bool isSortColumn)
-    {
-        var label = isSortColumn ? $"{text} {(SortDescending ? "▾" : "▴")}" : text;
-
-        var formatted = _headerTextCache.Get(
-            label, rect.Width, HeaderTextBrush, emphasised: true, selected: false);
-
-        var x = rightAligned ? rect.Right - Math.Min(formatted.Width, rect.Width) : rect.X;
-        context.DrawText(formatted, new Point(x, (HeaderHeight - formatted.Height) / 2));
-    }
-
-    // ---- Interaction --------------------------------------------------------
+    // ---- Input --------------------------------------------------------------
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        Focus();
 
         var point = e.GetPosition(this);
 
@@ -406,8 +269,8 @@ public sealed class ProcessTreeView : Control
             return;
         }
 
-        var index = (int)((point.Y - HeaderHeight + _verticalOffset) / RowHeight);
-        if (index < 0 || index >= _rows.Count)
+        var index = RowIndexAt(point);
+        if (index < 0)
         {
             return;
         }
@@ -426,7 +289,7 @@ public sealed class ProcessTreeView : Control
             }
         }
 
-        Select(index);
+        SetSelectedIndex(index);
     }
 
     private void HandleHeaderClick(Point point)
@@ -437,7 +300,7 @@ public sealed class ProcessTreeView : Control
             return;
         }
 
-        var x = point.X - NamePaneWidth + _horizontalOffset;
+        var x = point.X - NamePaneWidth + HorizontalOffset;
         double accumulated = 0;
 
         for (var c = 1; c < _columns.Count; c++)
@@ -451,133 +314,29 @@ public sealed class ProcessTreeView : Control
         }
     }
 
-    private void Select(int index)
-    {
-        if (index == _selectedIndex)
-        {
-            return;
-        }
-
-        _selectedIndex = index;
-        SelectionChanged?.Invoke(this, SelectedProcess);
-        InvalidateVisual();
-    }
-
-    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
-    {
-        base.OnPointerWheelChanged(e);
-
-        // Shift converts the wheel to horizontal, which is the convention for
-        // panes that scroll both ways.
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-        {
-            HorizontalOffset -= e.Delta.Y * 40;
-        }
-        else
-        {
-            VerticalOffset -= e.Delta.Y * RowHeight * 3;
-        }
-
-        e.Handled = true;
-    }
-
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        base.OnKeyDown(e);
-
-        var pageRows = Math.Max(1, (int)(ViewportHeight / RowHeight) - 1);
-
-        switch (e.Key)
+        // Left and right collapse and expand before the base class treats them
+        // as navigation.
+        if (SelectedIndex >= 0 && SelectedIndex < _rows.Count)
         {
-            case Key.Down:
-                MoveSelection(1);
-                break;
-            case Key.Up:
-                MoveSelection(-1);
-                break;
-            case Key.PageDown:
-                MoveSelection(pageRows);
-                break;
-            case Key.PageUp:
-                MoveSelection(-pageRows);
-                break;
-            case Key.Home:
-                MoveSelectionTo(0);
-                break;
-            case Key.End:
-                MoveSelectionTo(_rows.Count - 1);
-                break;
-            case Key.Left when _selectedIndex >= 0 && _rows[_selectedIndex].IsExpanded:
-                ToggleRequested?.Invoke(this, _rows[_selectedIndex].Process.Id);
-                break;
-            case Key.Right when _selectedIndex >= 0 && !_rows[_selectedIndex].IsExpanded:
-                ToggleRequested?.Invoke(this, _rows[_selectedIndex].Process.Id);
-                break;
-            default:
+            var row = _rows[SelectedIndex];
+
+            if (e.Key == Key.Left && row.IsExpanded && row.HasChildren)
+            {
+                ToggleRequested?.Invoke(this, row.Process.Id);
+                e.Handled = true;
                 return;
+            }
+
+            if (e.Key == Key.Right && !row.IsExpanded && row.HasChildren)
+            {
+                ToggleRequested?.Invoke(this, row.Process.Id);
+                e.Handled = true;
+                return;
+            }
         }
 
-        e.Handled = true;
+        base.OnKeyDown(e);
     }
-
-    private void MoveSelection(int delta) =>
-        MoveSelectionTo(Math.Clamp(_selectedIndex + delta, 0, _rows.Count - 1));
-
-    private void MoveSelectionTo(int index)
-    {
-        if (_rows.Count == 0)
-        {
-            return;
-        }
-
-        Select(Math.Clamp(index, 0, _rows.Count - 1));
-        ScrollIntoView(_selectedIndex);
-    }
-
-    private void ScrollIntoView(int index)
-    {
-        var top = index * RowHeight;
-        var bottom = top + RowHeight;
-
-        if (top < _verticalOffset)
-        {
-            VerticalOffset = top;
-        }
-        else if (bottom > _verticalOffset + ViewportHeight)
-        {
-            VerticalOffset = bottom - ViewportHeight;
-        }
-    }
-
-    // ---- Brushes ------------------------------------------------------------
-
-    // Frozen per theme rather than constructed per use. These are read several
-    // hundred times a frame.
-    private static readonly IBrush LightBackground = Brushes.White;
-    private static readonly IBrush DarkBackground = new SolidColorBrush(Color.FromRgb(30, 30, 30));
-    private static readonly IBrush LightHeaderBackground = new SolidColorBrush(Color.FromRgb(240, 240, 240));
-    private static readonly IBrush DarkHeaderBackground = new SolidColorBrush(Color.FromRgb(45, 45, 45));
-    private static readonly IBrush LightText = Brushes.Black;
-    private static readonly IBrush DarkText = new SolidColorBrush(Color.FromRgb(230, 230, 230));
-    private static readonly IBrush LightHeaderText = new SolidColorBrush(Color.FromRgb(40, 40, 40));
-    private static readonly IBrush DarkHeaderText = new SolidColorBrush(Color.FromRgb(210, 210, 210));
-    private static readonly IBrush LightAlternateRow = new SolidColorBrush(Color.FromRgb(248, 248, 248));
-    private static readonly IBrush DarkAlternateRow = new SolidColorBrush(Color.FromRgb(36, 36, 36));
-    private static readonly IBrush LightExpander = new SolidColorBrush(Color.FromRgb(80, 80, 80));
-    private static readonly IBrush DarkExpander = new SolidColorBrush(Color.FromRgb(180, 180, 180));
-    private static readonly IPen LightDivider = new Pen(new SolidColorBrush(Color.FromRgb(210, 210, 210)), 1);
-    private static readonly IPen DarkDivider = new Pen(new SolidColorBrush(Color.FromRgb(60, 60, 60)), 1);
-
-    private static readonly IBrush Selection = new SolidColorBrush(Color.FromRgb(0, 92, 168));
-
-    private IBrush Background => IsDarkMode ? DarkBackground : LightBackground;
-    private IBrush HeaderBackground => IsDarkMode ? DarkHeaderBackground : LightHeaderBackground;
-    private IBrush TextBrush => IsDarkMode ? DarkText : LightText;
-    private IBrush HeaderTextBrush => IsDarkMode ? DarkHeaderText : LightHeaderText;
-    private IBrush AlternateRowBrush => IsDarkMode ? DarkAlternateRow : LightAlternateRow;
-    private IBrush ExpanderBrush => IsDarkMode ? DarkExpander : LightExpander;
-    private IPen DividerPen => IsDarkMode ? DarkDivider : LightDivider;
-
-    private static IBrush SelectedTextBrush => Brushes.White;
-    private static IBrush SelectionBrush => Selection;
 }

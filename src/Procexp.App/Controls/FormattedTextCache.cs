@@ -19,7 +19,7 @@ namespace Procexp.App.Controls;
 /// Entries are dropped when they go unused for a few frames, so the cache
 /// follows the visible window rather than growing with the process table.
 /// </remarks>
-internal sealed class FormattedTextCache(Typeface typeface, double fontSize)
+public sealed class FormattedTextCache(Typeface typeface, double fontSize)
 {
     private readonly record struct Key(string Text, double MaxWidth, bool Emphasised, bool Selected);
 
@@ -35,7 +35,7 @@ internal sealed class FormattedTextCache(Typeface typeface, double fontSize)
     private long _frame;
 
     /// <summary>Advance the frame counter; call once per paint.</summary>
-    internal void BeginFrame()
+    public void BeginFrame()
     {
         _frame++;
 
@@ -47,7 +47,7 @@ internal sealed class FormattedTextCache(Typeface typeface, double fontSize)
         }
     }
 
-    internal FormattedText Get(string text, double maxWidth, IBrush brush, bool emphasised, bool selected)
+    public FormattedText Get(string text, double maxWidth, IBrush brush, bool emphasised, bool selected)
     {
         // Quantise the width so a one-pixel resize does not invalidate every
         // entry. Trimming only changes at character boundaries anyway.
@@ -101,5 +101,5 @@ internal sealed class FormattedTextCache(Typeface typeface, double fontSize)
     }
 
     /// <summary>Discard everything, for a theme change that alters every brush.</summary>
-    internal void Clear() => _entries.Clear();
+    public void Clear() => _entries.Clear();
 }

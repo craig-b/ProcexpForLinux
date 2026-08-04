@@ -19,12 +19,20 @@ internal static class ProcMaps
         var buffer = ProcFile.RentBuffer(65536);
         try
         {
-            if (!ProcFile.TryRead($"/proc/{id.Pid}/maps", ref buffer, out var length))
+            if (ProcFile.TryRead($"/proc/{id.Pid}/maps", ref buffer, out var length))
             {
-                return [];
+                return Parse(buffer.AsSpan(0, length));
             }
 
-            return Parse(buffer.AsSpan(0, length));
+            // Distinguish "exited" from "not allowed". Unlike most of /proc,
+            // maps is gated by ptrace_may_access, so it is readable only for
+            // your own processes — the same restriction macOS applies, and one
+            // the caller has to be able to report rather than showing an empty
+            // list that reads as "this process has no libraries loaded".
+            throw Directory.Exists($"/proc/{id.Pid}")
+                ? ProviderException.NotPermitted(
+                    $"/proc/{id.Pid}/maps is readable only by the process owner")
+                : ProviderException.ProcessGone(id);
         }
         finally
         {

@@ -3,23 +3,30 @@
 ## What it is for
 
 Almost everything Process Explorer shows on Linux is world-readable, so the app
-runs unprivileged and the helper is optional. It exists for exactly four things:
+runs unprivileged and the helper is optional. It exists for these:
 
 | Capability | Why it needs privilege |
 |---|---|
 | `/proc/PID/io` | Mode 0400, owned by the process's user. Fills the I/O Read/Write columns for other users' processes. |
 | `/proc/PID/smaps_rollup` | Same restriction. Supplies proportional set size, the Private Bytes column. |
 | `/proc/PID/environ` | Same restriction. Supplies the Environment tab. |
+| `/proc/PID/maps` | Gated by `ptrace_may_access`. Supplies the lower pane's mapped-files view. |
+| `/proc/PID/fd`, `fdinfo` | Same gate. Supplies the handles view. |
 | Signalling other users' processes | Kill, suspend, resume and renice across user boundaries. |
+
+> The maps and fd operations are not yet implemented in the helper protocol —
+> the client reports "not permitted" for other users' processes today. They
+> belong here rather than anywhere else, and the protocol has room for them.
 
 Without the helper, those fields are blank and cross-user actions fail — nothing
 else changes.
 
-This is a much smaller job than the macOS equivalent, where the privileged helper
-also supplies per-thread detail, command lines and environments for any process
-outside the user's own session, because `task_for_pid` is restricted. On Linux
-`/proc/PID/cmdline` is world-readable and `/proc/PID/task` needs no privilege at
-all.
+This is a smaller job than the macOS equivalent, where the privileged helper also
+supplies per-thread detail and command lines for any process outside the user's
+own session, because `task_for_pid` is restricted. On Linux `/proc/PID/cmdline`
+is world-readable and the whole of `/proc/PID/task` — thread list, per-thread CPU,
+wait channel — needs no privilege at all. Mapped files and descriptors do,
+matching macOS.
 
 ## Trust model
 

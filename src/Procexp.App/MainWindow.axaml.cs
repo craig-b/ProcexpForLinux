@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
     private ScrollBar _horizontalScroll = null!;
     private TextBlock _statusText = null!;
     private TextBlock _timingText = null!;
+    private LowerPaneView _lowerPane = null!;
 
     private bool _paused;
     private double _intervalSeconds = 1.0;
@@ -64,7 +66,11 @@ public partial class MainWindow : Window
 
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
+        _lowerPane = new LowerPaneView(_sampler) { IsDarkMode = _tree.IsDarkMode };
+        Get<ContentControl>("LowerPaneHost").Content = _lowerPane;
+
         WireTree();
+        WireLowerPane();
         WireToolbar();
         WireMenus();
         WireContextMenu();
@@ -82,9 +88,74 @@ public partial class MainWindow : Window
 
     // ---- Wiring -------------------------------------------------------------
 
+    private void WireLowerPane()
+    {
+        var combo = Get<ComboBox>("PaneModeCombo");
+        combo.ItemsSource = new[] { "Mapped Files", "Handles", "Threads" };
+
+        combo.SelectionChanged += (_, _) =>
+        {
+            var mode = (LowerPaneMode)Math.Clamp(combo.SelectedIndex, 0, 2);
+            _lowerPane.Mode = mode;
+
+            Get<MenuItem>("MenuPaneModules").IsChecked = mode == LowerPaneMode.Modules;
+            Get<MenuItem>("MenuPaneHandles").IsChecked = mode == LowerPaneMode.Handles;
+            Get<MenuItem>("MenuPaneThreads").IsChecked = mode == LowerPaneMode.Threads;
+        };
+
+        WirePaneMode("MenuPaneModules", LowerPaneMode.Modules);
+        WirePaneMode("MenuPaneHandles", LowerPaneMode.Handles);
+        WirePaneMode("MenuPaneThreads", LowerPaneMode.Threads);
+
+        var toggle = Get<ToggleButton>("LowerPaneToggle");
+        toggle.IsCheckedChanged += (_, _) => SetLowerPaneVisible(toggle.IsChecked == true);
+
+        var menuToggle = Get<MenuItem>("MenuLowerPane");
+        menuToggle.Click += (_, _) => SetLowerPaneVisible(menuToggle.IsChecked);
+
+        void WirePaneMode(string name, LowerPaneMode mode) =>
+            Get<MenuItem>(name).Click += (_, _) => combo.SelectedIndex = (int)mode;
+    }
+
+    /// <summary>
+    /// Show or hide the lower pane.
+    /// </summary>
+    /// <remarks>
+    /// The splitter and the pane's row collapse together. Hiding only the pane
+    /// would leave a draggable divider with nothing beneath it.
+    /// </remarks>
+    private void SetLowerPaneVisible(bool visible)
+    {
+        var split = Get<Grid>("PaneSplit");
+
+        split.RowDefinitions[1].Height = visible ? GridLength.Auto : new GridLength(0);
+        split.RowDefinitions[2].Height = visible ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+
+        Get<GridSplitter>("PaneSplitter").IsVisible = visible;
+        Get<ContentControl>("LowerPaneHost").IsVisible = visible;
+        Get<ToggleButton>("LowerPaneToggle").IsChecked = visible;
+        Get<MenuItem>("MenuLowerPane").IsChecked = visible;
+
+        if (visible)
+        {
+            _lowerPane.SetProcess(_tree.SelectedProcess?.Id);
+        }
+    }
+
     private void WireTree()
     {
-        _tree.SelectionChanged += (_, _) => UpdateStatus();
+        _tree.SelectionChanged += (_, _) =>
+        {
+            UpdateStatus();
+
+            // The lower pane follows the selection, and does nothing at all when
+            // it is hidden — enumerating a process's descriptors costs more than
+            // the whole sweep, so it must not happen invisibly.
+            if (Get<ContentControl>("LowerPaneHost").IsVisible)
+            {
+                _lowerPane.SetProcess(_tree.SelectedProcess?.Id);
+            }
+        };
 
         _tree.ToggleRequested += (_, id) =>
         {
@@ -259,6 +330,11 @@ public partial class MainWindow : Window
             Record(_sweepTimes, sweep);
             _list.Apply(snapshot, DateTimeOffset.Now);
             Rebuild();
+
+            if (Get<ContentControl>("LowerPaneHost").IsVisible)
+            {
+                _ = _lowerPane.ReloadAsync();
+            }
         });
     }
 
@@ -280,10 +356,14 @@ public partial class MainWindow : Window
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    if (_list.Tick(DateTimeOffset.Now))
+                    var now = DateTimeOffset.Now;
+
+                    if (_list.Tick(now))
                     {
                         Rebuild();
                     }
+
+                    _lowerPane.Tick(now);
                 });
             }
         }

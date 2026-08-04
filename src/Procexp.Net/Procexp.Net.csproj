@@ -3,4 +3,9 @@
     <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
     <ProjectReference Include="../Procexp.Sampling/Procexp.Sampling.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The parsers are internal because nothing outside the assembly should call
+         them, but they are exactly what the tests need to exercise directly. -->
+    <InternalsVisibleTo Include="Procexp.Net.Tests" />
+  </ItemGroup>
 </Project>

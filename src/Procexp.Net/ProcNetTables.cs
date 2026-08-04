@@ -30,6 +30,19 @@ internal static class ProcNetTables
     }
 
     /// <summary>
+    /// Parse a single table from an arbitrary path. Exists so the tests can drive
+    /// the parser over fixture files instead of whatever /proc/net happens to
+    /// contain on the machine running them.
+    /// </summary>
+    internal static Dictionary<ulong, SocketInfo> ReadInetTableForTesting(
+        string path, SocketProtocol protocol, bool isTcp)
+    {
+        var result = new Dictionary<ulong, SocketInfo>();
+        ReadInetTable(path, protocol, isTcp, result);
+        return result;
+    }
+
+    /// <summary>
     /// Parse one of the IPv4/IPv6 tables. Columns are
     /// <c>sl local rem st tx:rx tr:when retrnsmt uid timeout inode</c>.
     /// </summary>

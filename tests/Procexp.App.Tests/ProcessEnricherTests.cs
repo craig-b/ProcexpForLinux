@@ -1,4 +1,3 @@
-using Procexp.App;
 using Procexp.Model;
 using Xunit;
 

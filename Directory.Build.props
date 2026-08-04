@@ -13,6 +13,12 @@
          netlink, so unsafe blocks are expected rather than exceptional. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
+    <!-- Required for IDE0005 (unused usings) to be reported during a build at
+         all. CS1591 is suppressed with it: the point is dead usings, not a
+         mandate to document every public member. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
     <!-- Keep the codebase publishable with Native AOT. These analysers are on
          everywhere, not just in the published projects, so reflection creeping
          into a library fails the build here rather than silently breaking the

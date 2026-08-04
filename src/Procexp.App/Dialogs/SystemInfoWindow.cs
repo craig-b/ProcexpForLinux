@@ -210,15 +210,15 @@ public sealed class SystemInfoWindow : Window
     {
         var cores = new Grid { Margin = new Thickness(12, 0, 12, 12) };
 
-        const int columns = 4;
-        for (var c = 0; c < columns; c++)
+        const int ColumnCount = 4;
+        for (var c = 0; c < ColumnCount; c++)
         {
             cores.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         }
 
         for (var i = 0; i < _hardware.LogicalCores; i++)
         {
-            if (i % columns == 0)
+            if (i % ColumnCount == 0)
             {
                 cores.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             }
@@ -237,8 +237,8 @@ public sealed class SystemInfoWindow : Window
             graph.AddSeries(Color.FromRgb(90, 200, 90));
             _coreGraphs.Add(graph);
 
-            Grid.SetRow(graph, i / columns);
-            Grid.SetColumn(graph, i % columns);
+            Grid.SetRow(graph, i / ColumnCount);
+            Grid.SetColumn(graph, i % ColumnCount);
             cores.Children.Add(graph);
         }
 

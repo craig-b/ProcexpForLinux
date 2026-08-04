@@ -1,0 +1,232 @@
+# Code style for ProcexpForLinux.
+#
+# Layout is CSharpier's job and is deliberately NOT configured here. Every
+# formatting rule (csharp_new_line_*, csharp_space_*, csharp_indent_*, and the
+# IDE0055 "fix formatting" rule) is left alone or silenced, so the two tools
+# cannot disagree about the same line.
+#
+# What lives here is everything CSharpier has no opinion about: naming, using
+# ordering, var usage, modifier order, and the language-feature preferences that
+# are about meaning rather than whitespace.
+#
+# EnforceCodeStyleInBuild is on in Directory.Build.props and TreatWarningsAsErrors
+# is on with it, so anything marked `error` below fails the build rather than
+# scrolling past in an IDE.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# Markdown, YAML, JSON and shell are Prettier's, and C# and its XML are
+# CSharpier's, so no indent_size is declared for any of them here — a second
+# opinion on the same line is a fight waiting to happen. What is left above is
+# what every tool agrees on and what editors need before a formatter has run.
+
+[*.{md,markdown}]
+# Two trailing spaces are a hard line break in Markdown. Prettier preserves
+# them; an editor stripping them on save would silently change the rendering.
+trim_trailing_whitespace = false
+
+# ---------------------------------------------------------------------------
+# Formatting: owned by CSharpier
+# ---------------------------------------------------------------------------
+
+# IDE0055 is Roslyn's catch-all "formatting is wrong" rule. Leaving it enabled
+# would have it argue with CSharpier over the same lines, and CSharpier wins by
+# construction because it rewrites the file.
+dotnet_diagnostic.IDE0055.severity = none
+
+# ---------------------------------------------------------------------------
+# Usings — ordering and placement
+# ---------------------------------------------------------------------------
+
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Usings outside the namespace, which is what file-scoped namespaces imply.
+csharp_using_directive_placement = outside_namespace:error
+
+# An unused using is dead weight that survives refactors unnoticed.
+#
+# IDE0005 only reports during a build when GenerateDocumentationFile is on — a
+# long-standing Roslyn quirk, not a preference. Directory.Build.props enables it
+# and suppresses CS1591 in exchange.
+dotnet_diagnostic.IDE0005.severity = error
+
+# ---------------------------------------------------------------------------
+# Language features that change meaning, not layout
+# ---------------------------------------------------------------------------
+
+csharp_style_namespace_declarations = file_scoped:error
+# when_multiline, not true: a single-line body is fine, but anything spanning
+# lines needs braces. Requiring them everywhere would treble the length of the
+# key-dispatch chains in the /proc parsers for no gain in clarity.
+csharp_prefer_braces = when_multiline:error
+
+# var only where the type is already stated on the line. The middle option
+# matters: `var x = GetThing()` hides the type at the point it is hardest to
+# infer, which is exactly where a reader needs it.
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_prefer_not_pattern = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_range_operator = true:suggestion
+csharp_style_prefer_index_operator = true:suggestion
+csharp_style_throw_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_prefer_readonly_struct = true:suggestion
+
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_prefer_collection_expression = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:silent
+dotnet_style_prefer_conditional_expression_over_return = true:silent
+
+# Expression bodies: fine for one-liners, not for anything with real logic.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+csharp_style_expression_bodied_constructors = when_on_single_line:suggestion
+csharp_style_expression_bodied_lambdas = true:suggestion
+csharp_style_expression_bodied_local_functions = when_on_single_line:suggestion
+
+# ---------------------------------------------------------------------------
+# Modifiers
+# ---------------------------------------------------------------------------
+
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:error
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:error
+
+# Fields that are only assigned in a constructor should say so.
+dotnet_style_readonly_field = true:error
+
+# `this.` is noise in a codebase that prefixes fields with an underscore.
+dotnet_style_qualification_for_field = false:error
+dotnet_style_qualification_for_property = false:error
+dotnet_style_qualification_for_method = false:error
+dotnet_style_qualification_for_event = false:error
+
+dotnet_style_predefined_type_for_locals_parameters_members = true:error
+dotnet_style_predefined_type_for_member_access = true:error
+
+# ---------------------------------------------------------------------------
+# Naming
+# ---------------------------------------------------------------------------
+# This is the half that actually drifts in practice, and the half CSharpier will
+# never notice.
+#
+# The severity on each dotnet_naming_rule below is NOT sufficient on its own:
+# without an explicit dotnet_diagnostic entry for the analyser that reports them,
+# the whole naming section is silently ignored at build time. Verified by
+# building deliberately misnamed code — twelve violations went unreported until
+# this line was added.
+dotnet_diagnostic.IDE1006.severity = error
+
+# `this.` qualification is likewise reported by its own analysers, which need
+# enabling separately from the dotnet_style_qualification_* preferences above.
+dotnet_diagnostic.IDE0003.severity = error
+dotnet_diagnostic.IDE0009.severity = error
+
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+dotnet_naming_style.camel_case.capitalization = camel_case
+
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+dotnet_naming_style.interface_prefix.capitalization = pascal_case
+dotnet_naming_style.interface_prefix.required_prefix = I
+
+dotnet_naming_style.type_parameter_prefix.capitalization = pascal_case
+dotnet_naming_style.type_parameter_prefix.required_prefix = T
+
+# Interfaces: IThing
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_symbols.interfaces.applicable_accessibilities = *
+dotnet_naming_rule.interfaces_are_prefixed.symbols = interfaces
+dotnet_naming_rule.interfaces_are_prefixed.style = interface_prefix
+dotnet_naming_rule.interfaces_are_prefixed.severity = error
+
+# Type parameters: TThing
+dotnet_naming_symbols.type_parameters.applicable_kinds = type_parameter
+dotnet_naming_symbols.type_parameters.applicable_accessibilities = *
+dotnet_naming_rule.type_parameters_are_prefixed.symbols = type_parameters
+dotnet_naming_rule.type_parameters_are_prefixed.style = type_parameter_prefix
+dotnet_naming_rule.type_parameters_are_prefixed.severity = error
+
+# Types and non-field members: PascalCase
+dotnet_naming_symbols.types_and_members.applicable_kinds = class,struct,enum,property,method,event,delegate,local_function
+dotnet_naming_symbols.types_and_members.applicable_accessibilities = *
+dotnet_naming_rule.types_and_members_are_pascal.symbols = types_and_members
+dotnet_naming_rule.types_and_members_are_pascal.style = pascal_case
+dotnet_naming_rule.types_and_members_are_pascal.severity = error
+
+# Constants and statics: PascalCase, including private ones.
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.applicable_accessibilities = *
+dotnet_naming_symbols.constants.required_modifiers = const
+dotnet_naming_rule.constants_are_pascal.symbols = constants
+dotnet_naming_rule.constants_are_pascal.style = pascal_case
+dotnet_naming_rule.constants_are_pascal.severity = error
+
+dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_fields.applicable_accessibilities = *
+dotnet_naming_symbols.static_readonly_fields.required_modifiers = static,readonly
+dotnet_naming_rule.static_readonly_fields_are_pascal.symbols = static_readonly_fields
+dotnet_naming_rule.static_readonly_fields_are_pascal.style = pascal_case
+dotnet_naming_rule.static_readonly_fields_are_pascal.severity = error
+
+# Public fields: PascalCase.
+dotnet_naming_symbols.public_fields.applicable_kinds = field
+dotnet_naming_symbols.public_fields.applicable_accessibilities = public,internal,protected,protected_internal
+dotnet_naming_rule.public_fields_are_pascal.symbols = public_fields
+dotnet_naming_rule.public_fields_are_pascal.style = pascal_case
+dotnet_naming_rule.public_fields_are_pascal.severity = error
+
+# Private instance fields: _camelCase.
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private,private_protected
+dotnet_naming_rule.private_fields_are_underscored.symbols = private_fields
+dotnet_naming_rule.private_fields_are_underscored.style = underscore_camel_case
+dotnet_naming_rule.private_fields_are_underscored.severity = error
+
+# Local constants are constants first and locals second, so they keep
+# PascalCase. This rule must precede the general locals rule below, because the
+# first matching rule wins.
+dotnet_naming_symbols.local_constants.applicable_kinds = local
+dotnet_naming_symbols.local_constants.applicable_accessibilities = *
+dotnet_naming_symbols.local_constants.required_modifiers = const
+dotnet_naming_rule.local_constants_are_pascal.symbols = local_constants
+dotnet_naming_rule.local_constants_are_pascal.style = pascal_case
+dotnet_naming_rule.local_constants_are_pascal.severity = error
+
+# Parameters and locals: camelCase.
+dotnet_naming_symbols.parameters_and_locals.applicable_kinds = parameter,local
+dotnet_naming_symbols.parameters_and_locals.applicable_accessibilities = *
+dotnet_naming_rule.parameters_and_locals_are_camel.symbols = parameters_and_locals
+dotnet_naming_rule.parameters_and_locals_are_camel.style = camel_case
+dotnet_naming_rule.parameters_and_locals_are_camel.severity = error
+
+# ---------------------------------------------------------------------------
+# Generated and test code
+# ---------------------------------------------------------------------------
+
+[**/{obj,bin}/**.cs]
+generated_code = true
+
+[tests/**.cs]
+# Test method names read better as sentences than as identifiers, and the
+# suite deliberately uses long descriptive names.
+dotnet_diagnostic.IDE1006.severity = none

@@ -1,4 +1,3 @@
-using Procexp.Model;
 using Xunit;
 
 namespace Procexp.Model.Tests;

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -36,13 +35,13 @@ public partial class MainWindow : Window
     private readonly HashSet<ProcessId> _collapsed = [];
     private readonly CancellationTokenSource _lifetime = new();
 
-    private ActionCoordinator _actions = null!;
-    private ProcessTreeView _tree = null!;
-    private ScrollBar _verticalScroll = null!;
-    private ScrollBar _horizontalScroll = null!;
-    private TextBlock _statusText = null!;
-    private TextBlock _timingText = null!;
-    private LowerPaneView _lowerPane = null!;
+    private readonly ActionCoordinator _actions = null!;
+    private readonly ProcessTreeView _tree = null!;
+    private readonly ScrollBar _verticalScroll = null!;
+    private readonly ScrollBar _horizontalScroll = null!;
+    private readonly TextBlock _statusText = null!;
+    private readonly TextBlock _timingText = null!;
+    private readonly LowerPaneView _lowerPane = null!;
     private SystemInfoWindow? _systemInfo;
 
     private readonly SystemStatsProvider _systemStats = new();
@@ -57,7 +56,7 @@ public partial class MainWindow : Window
     private bool _paused;
     private double _intervalSeconds = 1.0;
 
-    private AppSettings _settings = SettingsStore.Load();
+    private readonly AppSettings _settings = SettingsStore.Load();
     private bool _enrichmentDirty;
     private CancellationTokenSource? _saveDebounce;
 

@@ -27,14 +27,14 @@ void Check(string what, bool ok, string? detail = null)
 
 void Skip(string what, string why) => Console.WriteLine($"  [SKIP] {what} — {why}");
 
-/// Assert something only where the environment can actually satisfy it.
-///
-/// The checker runs on desktops, in CI, and inside containers, and those differ
-/// enormously: a container has one process, no systemd, no kernel threads
-/// (the pid namespace hides them), no sockets and no GPU. Asserting desktop
-/// facts everywhere turns a perfectly working build red for reasons that have
-/// nothing to do with the code — which is worse than not checking, because it
-/// trains everyone to ignore the result.
+// Assert something only where the environment can actually satisfy it.
+//
+// The checker runs on desktops, in CI, and inside containers, and those differ
+// enormously: a container has one process, no systemd, no kernel threads
+// (the pid namespace hides them), no sockets and no GPU. Asserting desktop
+// facts everywhere turns a perfectly working build red for reasons that have
+// nothing to do with the code — which is worse than not checking, because it
+// trains everyone to ignore the result.
 void CheckWhere(bool applicable, string why, string what, bool ok, string? detail = null)
 {
     if (applicable)
@@ -698,15 +698,15 @@ void Measure(string label, ProcSamplerOptions options)
     s.SnapshotAsync().AsTask().GetAwaiter().GetResult();   // warm caches
 
     var timer = Stopwatch.StartNew();
-    const int iterations = 3;
-    for (var i = 0; i < iterations; i++)
+    const int Iterations = 3;
+    for (var i = 0; i < Iterations; i++)
     {
         s.SnapshotAsync().AsTask().GetAwaiter().GetResult();
     }
 
     timer.Stop();
     Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-        $"    {label,-28} {timer.Elapsed.TotalMilliseconds / iterations,7:F1} ms/sweep"));
+        $"    {label,-28} {timer.Elapsed.TotalMilliseconds / Iterations,7:F1} ms/sweep"));
 }
 
 // ---------------------------------------------------------------------------

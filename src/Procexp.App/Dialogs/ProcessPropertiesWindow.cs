@@ -48,7 +48,7 @@ public sealed class ProcessPropertiesWindow : Window
     {
         Title = "Working Set",
         Height = 90,
-        FormatValue = v => ValueFormat.Bytes((ulong)Math.Max(0, v)),
+        FormatValue = v => (ulong)Math.Max(0, v) is var b && b == 0 ? "0 B" : ValueFormat.Bytes(b),
     };
 
     private TabControl _tabs = null!;

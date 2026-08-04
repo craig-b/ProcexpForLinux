@@ -10,6 +10,8 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Procexp.App.Controls;
 using Procexp.App.Dialogs;
+using Procexp.Gpu;
+using Procexp.Metrics;
 using Procexp.Model;
 using Procexp.Privileged;
 using Procexp.Sampling;
@@ -40,6 +42,10 @@ public partial class MainWindow : Window
     private TextBlock _statusText = null!;
     private TextBlock _timingText = null!;
     private LowerPaneView _lowerPane = null!;
+    private SystemInfoWindow? _systemInfo;
+
+    private readonly SystemStatsProvider _systemStats = new();
+    private readonly GpuProvider _gpu = new();
 
     private bool _paused;
     private double _intervalSeconds = 1.0;
@@ -258,6 +264,7 @@ public partial class MainWindow : Window
 
         Get<MenuItem>("MenuAbout").Click += (_, _) => _ = ShowAboutAsync();
         Get<MenuItem>("MenuProperties").Click += (_, _) => ShowProperties();
+        Get<MenuItem>("MenuSystemInfo").Click += (_, _) => ShowSystemInfo();
 
         void WireSpeed(string name, double seconds) =>
             Get<MenuItem>(name).Click += (_, _) => _intervalSeconds = seconds;
@@ -354,6 +361,8 @@ public partial class MainWindow : Window
             {
                 _ = _lowerPane.ReloadAsync();
             }
+
+            _systemInfo?.SetProcessCounts(snapshot.Processes.Count, snapshot.System.ThreadCount);
         });
     }
 
@@ -549,6 +558,28 @@ public partial class MainWindow : Window
 
         var window = new ProcessPropertiesWindow(_detail, process, _tree.IsDarkMode);
         window.Show(this);
+    }
+
+    /// <summary>
+    /// Open the System Information window, or bring the existing one forward.
+    /// </summary>
+    /// <remarks>
+    /// Single-instance, unlike Properties. Two copies would each run their own
+    /// one-second stats loop and disagree on every delta, since the counters are
+    /// consumed rather than sampled.
+    /// </remarks>
+    private void ShowSystemInfo()
+    {
+        if (_systemInfo is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        _systemInfo = new SystemInfoWindow(_systemStats, _gpu, _tree.IsDarkMode);
+        _systemInfo.SetProcessCounts(_list.Current.Processes.Count, _list.Current.System.ThreadCount);
+        _systemInfo.Closed += (_, _) => _systemInfo = null;
+        _systemInfo.Show(this);
     }
 
     private async Task CopyAsync(string? text)

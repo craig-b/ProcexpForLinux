@@ -26,6 +26,8 @@
         <MenuItem Name="MenuPause" Header="_Pause" InputGesture="Space" ToggleType="CheckBox" />
         <MenuItem Name="MenuRefreshNow" Header="_Update Now" InputGesture="F5" />
         <Separator />
+        <MenuItem Name="MenuSystemInfo" Header="S_ystem Information..." InputGesture="Ctrl+I" />
+        <Separator />
         <MenuItem Name="MenuTreeMode" Header="Show Process _Tree"
                   ToggleType="CheckBox" IsChecked="True" InputGesture="Ctrl+T" />
         <Separator />

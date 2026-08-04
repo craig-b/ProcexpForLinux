@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Procexp.Actions/Procexp.Actions.csproj" />
+    <Project Path="src/Procexp.App/Procexp.App.csproj" />
+    <Project Path="src/Procexp.Autostart/Procexp.Autostart.csproj" />
+    <Project Path="src/Procexp.Gpu/Procexp.Gpu.csproj" />
+    <Project Path="src/Procexp.Helper/Procexp.Helper.csproj" />
+    <Project Path="src/Procexp.Model/Procexp.Model.csproj" />
+    <Project Path="src/Procexp.Net/Procexp.Net.csproj" />
+    <Project Path="src/Procexp.Privileged/Procexp.Privileged.csproj" />
+    <Project Path="src/Procexp.Provenance/Procexp.Provenance.csproj" />
+    <Project Path="src/Procexp.Sampling/Procexp.Sampling.csproj" />
+    <Project Path="src/Procexp.Smoke/Procexp.Smoke.csproj" />
+    <Project Path="src/Procexp.SystemStats/Procexp.SystemStats.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Procexp.Actions.Tests/Procexp.Actions.Tests.csproj" />
+    <Project Path="tests/Procexp.Autostart.Tests/Procexp.Autostart.Tests.csproj" />
+    <Project Path="tests/Procexp.Model.Tests/Procexp.Model.Tests.csproj" />
+    <Project Path="tests/Procexp.Net.Tests/Procexp.Net.Tests.csproj" />
+    <Project Path="tests/Procexp.Provenance.Tests/Procexp.Provenance.Tests.csproj" />
+    <Project Path="tests/Procexp.Sampling.Tests/Procexp.Sampling.Tests.csproj" />
+  </Folder>
+</Solution>

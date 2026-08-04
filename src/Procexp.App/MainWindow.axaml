@@ -1,0 +1,9 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Procexp.App.MainWindow"
+        Title="Process Explorer"
+        Width="1100" Height="700">
+  <TextBlock Margin="16"
+             VerticalAlignment="Center" HorizontalAlignment="Center"
+             Text="Process Explorer for Linux — scaffold." />
+</Window>

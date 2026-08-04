@@ -80,6 +80,15 @@ Release binaries — Native AOT, no runtime dependency:
 
 See [docs/RELEASE.md](docs/RELEASE.md) for the measurements behind that choice.
 
+## Distributions
+
+Tested on Arch, Debian 13, Ubuntu 24.04, Fedora and Alpine, against all four
+package managers. The glibc binary runs unmodified on the first four; Alpine
+needs a musl build, which `Scripts/build-musl.sh` produces.
+
+Service classification requires systemd; everything else is init-agnostic. See
+[docs/DISTROS.md](docs/DISTROS.md).
+
 ## What needs privilege
 
 Most of `/proc` is world-readable, so the app runs unprivileged and shows the

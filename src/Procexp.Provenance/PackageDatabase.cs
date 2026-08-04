@@ -215,15 +215,56 @@ public sealed class PackageDatabase
             return null;
         }
 
-        // "/usr/bin/ls is owned by busybox-1.36.1-r15"
+        // "/usr/bin/ls is owned by busybox-1.36.1-r15", or for a symlink,
+        // "/bin/ls symlink target is owned by busybox-1.36.1-r15".
         var marker = output.LastIndexOf("owned by ", StringComparison.Ordinal);
         if (marker < 0)
         {
             return null;
         }
 
-        var name = output[(marker + "owned by ".Length)..].Trim();
-        return name.Length == 0 ? null : new PackageOwnership { PackageName = name };
+        var identifier = output[(marker + "owned by ".Length)..].Trim();
+
+        // Take only the first line: apk reports each queried path separately, and
+        // a symlink produces a line for the link and another for its target.
+        var newline = identifier.IndexOf('\n');
+        if (newline >= 0)
+        {
+            identifier = identifier[..newline].Trim();
+        }
+
+        if (identifier.Length == 0)
+        {
+            return null;
+        }
+
+        var (name, version) = SplitApkIdentifier(identifier);
+        return new PackageOwnership { PackageName = name, Version = version };
+    }
+
+    /// <summary>
+    /// Split an apk identifier into name and version.
+    /// </summary>
+    /// <remarks>
+    /// apk reports a single concatenated <c>name-version-rRELEASE</c> string
+    /// rather than separate fields, so "busybox-1.37.0-r31" has to be taken apart
+    /// by convention: the release is the trailing <c>-r&lt;digits&gt;</c>, and the
+    /// version is the hyphen-separated component before it. Package names
+    /// themselves routinely contain hyphens, so splitting from the left would be
+    /// wrong for anything like "font-noto-emoji".
+    /// </remarks>
+    private static (string Name, string? Version) SplitApkIdentifier(string identifier)
+    {
+        var release = identifier.LastIndexOf("-r", StringComparison.Ordinal);
+        if (release <= 0 || !identifier[(release + 2)..].All(char.IsAsciiDigit))
+        {
+            return (identifier, null);
+        }
+
+        var versionStart = identifier.LastIndexOf('-', release - 1);
+        return versionStart <= 0
+            ? (identifier, null)
+            : (identifier[..versionStart], identifier[(versionStart + 1)..]);
     }
 
     private PackageOwnership Detail(string name, Func<PackageOwnership> factory)

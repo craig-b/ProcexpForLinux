@@ -30,6 +30,54 @@ jobs:
       - name: Smoke check against the runner's /proc
         run: dotnet run --project src/Procexp.Smoke --configuration Release --no-build --nologo
 
+  # Prove the parsers work on more than the distribution they were written on.
+  # This is where testing Alpine found the apk version parsing bug.
+  distros:
+    runs-on: ubuntu-latest
+    needs: build
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['debian:13-slim', 'ubuntu:24.04', 'fedora:latest']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install the AOT toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish the smoke checker
+        run: |
+          dotnet publish src/Procexp.Smoke --configuration Release \
+            --runtime linux-x64 -p:PublishAot=true --output ./smoke --nologo
+
+      # The checker skips assertions a container cannot satisfy, so a genuine
+      # parser regression is what makes this red.
+      - name: Run against ${{ matrix.image }}
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: docker run --rm -v "$PWD/smoke/procexp-smoke:/s:ro" "$IMAGE" /s
+
+  musl:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Built inside Alpine rather than cross-compiled: publishing
+      # -r linux-musl-x64 from a glibc host succeeds and produces a binary that
+      # runs on neither libc. See docs/DISTROS.md.
+      - name: Build and verify musl binaries
+        run: |
+          ./Scripts/build-musl.sh
+          docker run --rm -v "$PWD/artifacts/musl/procexp-smoke/procexp-smoke:/s:ro" alpine:3 /s
+
   package:
     runs-on: ubuntu-latest
     needs: build

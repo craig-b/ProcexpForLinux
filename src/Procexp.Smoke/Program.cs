@@ -25,6 +25,28 @@ void Check(string what, bool ok, string? detail = null)
     }
 }
 
+void Skip(string what, string why) => Console.WriteLine($"  [SKIP] {what} — {why}");
+
+/// Assert something only where the environment can actually satisfy it.
+///
+/// The checker runs on desktops, in CI, and inside containers, and those differ
+/// enormously: a container has one process, no systemd, no kernel threads
+/// (the pid namespace hides them), no sockets and no GPU. Asserting desktop
+/// facts everywhere turns a perfectly working build red for reasons that have
+/// nothing to do with the code — which is worse than not checking, because it
+/// trains everyone to ignore the result.
+void CheckWhere(bool applicable, string why, string what, bool ok, string? detail = null)
+{
+    if (applicable)
+    {
+        Check(what, ok, detail);
+    }
+    else
+    {
+        Skip(what, why);
+    }
+}
+
 Console.WriteLine("procexp-smoke: /proc sampling engine\n");
 
 // ---------------------------------------------------------------------------
@@ -56,6 +78,16 @@ Check("own executable path resolves", self?.ExecutablePath is not null, self?.Ex
 Check("own start time is sane",
     self is not null && self.StartTime > DateTimeOffset.Now.AddHours(-1) && self.StartTime <= DateTimeOffset.Now,
     self?.StartTime.ToString("O", CultureInfo.InvariantCulture));
+
+// What this environment can actually be asked about.
+var isContainerLike = snapshot.Processes.Count < 20;
+var hasSystemd = Directory.Exists("/run/systemd/system");
+var hasKernelThreads = snapshot.Processes.Values.Any(p => p.Flags.HasFlag(ProcessFlags.KernelThread));
+
+Console.WriteLine();
+Console.WriteLine($"Environment: {(isContainerLike ? "container-like" : "full system")}, " +
+                  $"systemd {(hasSystemd ? "present" : "absent")}, " +
+                  $"{snapshot.Processes.Count} processes");
 
 // ---------------------------------------------------------------------------
 Console.WriteLine("\nCross-check against ps");
@@ -102,7 +134,8 @@ var frame2 = enumerator.Current;
 await enumerator.DisposeAsync();
 
 var busy = frame2.Processes.Values.Where(p => p.CpuPercent > 0).ToList();
-Check("second frame has CPU rates", busy.Count > 0, $"{busy.Count} processes with measurable CPU");
+CheckWhere(!isContainerLike, "too few processes for anything to be measurably busy",
+    "second frame has CPU rates", busy.Count > 0, $"{busy.Count} processes with measurable CPU");
 
 var cores = Environment.ProcessorCount;
 var overrun = frame2.Processes.Values.Where(p => p.CpuPercent > cores * 100.0 + 50).ToList();
@@ -206,13 +239,17 @@ Console.WriteLine("\nClassification");
 // ---------------------------------------------------------------------------
 
 var services = snapshot.Processes.Values.Where(p => p.Flags.HasFlag(ProcessFlags.Service)).ToList();
-Check("systemd services detected", services.Count > 0, $"{services.Count} services");
-Check("services name their unit", services.Any(p => p.SystemdUnit is not null),
+CheckWhere(hasSystemd, "no systemd on this system",
+    "systemd services detected", services.Count > 0, $"{services.Count} services");
+CheckWhere(hasSystemd, "no systemd on this system",
+    "services name their unit", services.Any(p => p.SystemdUnit is not null),
     services.FirstOrDefault(p => p.SystemdUnit is not null)?.SystemdUnit);
 
 var kernelThreads = snapshot.Processes.Values.Where(p => p.Flags.HasFlag(ProcessFlags.KernelThread)).ToList();
-Check("kernel threads detected", kernelThreads.Count > 0, $"{kernelThreads.Count} kernel threads");
-Check("kernel threads have no image", kernelThreads.All(p => p.ExecutablePath is null));
+CheckWhere(!isContainerLike, "a pid namespace hides kernel threads",
+    "kernel threads detected", kernelThreads.Count > 0, $"{kernelThreads.Count} kernel threads");
+CheckWhere(hasKernelThreads, "none visible here",
+    "kernel threads have no image", kernelThreads.All(p => p.ExecutablePath is null));
 
 // ---------------------------------------------------------------------------
 Console.WriteLine("\nProvenance");
@@ -223,7 +260,10 @@ Check("package manager detected", provenance.PackageManager != PackageManagerKin
     provenance.PackageManager.ToString());
 
 // A distribution-owned binary must resolve to its package.
-var lsPath = "/usr/bin/ls";
+// Merged-usr is near-universal but not guaranteed, and busybox systems put it
+// elsewhere again. Take the first one that exists.
+var lsPath = new[] { "/usr/bin/ls", "/bin/ls", "/usr/bin/coreutils" }
+    .FirstOrDefault(File.Exists) ?? "/usr/bin/ls";
 if (File.Exists(lsPath))
 {
     var ls = await provenance.ProvenanceAsync(lsPath);
@@ -233,11 +273,24 @@ if (File.Exists(lsPath))
     Check("build-id read from ELF notes", ls.BuildId is { Length: > 8 }, ls.BuildId);
 
     // Cross-check the package name against the native tool.
+    // Ask whichever package manager this distro actually has.
     var owner = RunCommand("pacman", $"-Qoq {lsPath}")?.Trim()
-                ?? RunCommand("dpkg-query", $"-S {lsPath}")?.Split(':')[0].Trim();
+                ?? RunCommand("dpkg-query", $"-S {lsPath}")?.Split(':')[0].Trim()
+                ?? RunCommand("rpm", $"-qf --queryformat %{{NAME}} {lsPath}")?.Trim()
+                // apk answers with a whole sentence, and a different one again
+                // for a symlink, so reduce it to the identifier before comparing.
+                ?? RunCommand("apk", $"info --who-owns {lsPath}")
+                    ?.Split('\n')[0]
+                    .Split("owned by ")
+                    .LastOrDefault()
+                    ?.Trim()
+                    .Split('-')[0];
     if (!string.IsNullOrEmpty(owner))
     {
-        Check("package name matches the native tool", ls.PackageName == owner,
+        // Compare on the package name only: the tools disagree on how much
+        // version detail to append, and that is not what this is testing.
+        Check("package name matches the native tool",
+            ls.PackageName is { } ours && (ours == owner || ours.StartsWith(owner, StringComparison.Ordinal)),
             $"ours {ls.PackageName}, tool {owner}");
     }
 }
@@ -289,7 +342,8 @@ foreach (var candidate in snapshot.Processes.Values.Where(p => !p.Flags.HasFlag(
     }
 }
 
-Check("sockets found across processes", withSockets.Count > 0,
+CheckWhere(!isContainerLike, "nothing here holds sockets",
+    "sockets found across processes", withSockets.Count > 0,
     $"{withSockets.Count} processes holding {withSockets.Sum(w => w.Sockets.Count)} sockets");
 
 var allSockets = withSockets.SelectMany(w => w.Sockets).ToList();
@@ -297,8 +351,10 @@ Check("sockets carry an inode", allSockets.All(s => s.Inode > 0));
 Check("sockets map back to a descriptor", allSockets.All(s => s.Fd >= 0));
 
 var tcp = allSockets.Where(s => s.Protocol is SocketProtocol.Tcp or SocketProtocol.Tcp6).ToList();
-Check("TCP sockets present", tcp.Count > 0, $"{tcp.Count} TCP sockets");
-Check("TCP states decode", tcp.All(s => s.State.Length > 0) && tcp.Any(s => s.State == "ESTABLISHED" || s.State == "LISTEN"));
+CheckWhere(tcp.Count > 0, "no TCP sockets in this environment",
+    "TCP sockets present", tcp.Count > 0, $"{tcp.Count} TCP sockets");
+CheckWhere(tcp.Count > 0, "no TCP sockets in this environment",
+    "TCP states decode", tcp.All(s => s.State.Length > 0) && tcp.Any(s => s.State is "ESTABLISHED" or "LISTEN"));
 Check("listening sockets have a local port", tcp.Where(s => s.State == "LISTEN").All(s => s.LocalPort > 0));
 Check("addresses parse as valid IPs",
     tcp.All(s => System.Net.IPAddress.TryParse(s.LocalAddress, out _)));
@@ -310,7 +366,8 @@ Check("little-endian address decoding is correct", loopback is not null || tcp.C
     loopback is null ? "no loopback listener to check" : $"{loopback.LocalAddress}:{loopback.LocalPort}");
 
 var unix = allSockets.Where(s => s.Protocol == SocketProtocol.Unix).ToList();
-Check("unix sockets present", unix.Count > 0, $"{unix.Count} unix sockets");
+CheckWhere(!isContainerLike, "nothing here holds unix sockets",
+    "unix sockets present", unix.Count > 0, $"{unix.Count} unix sockets");
 
 // Cross-check the listening TCP port set against ss.
 var ssOutput = RunCommand("ss", "-ltn");
@@ -395,7 +452,10 @@ Check("cache sizes read", hardware.L1DataCache is > 0 && hardware.L3Cache is > 0
     $"L1d {ValueFormat.Bytes(hardware.L1DataCache)}, L2 {ValueFormat.Bytes(hardware.L2Cache)}, L3 {ValueFormat.Bytes(hardware.L3Cache)}");
 Check("kernel version read", hardware.KernelVersion is { Length: > 0 }, hardware.KernelVersion);
 Check("distribution identified", hardware.DistributionName is { Length: > 0 }, hardware.DistributionName);
-Check("boot volume present", hardware.Volumes.Any(v => v.IsBootVolume),
+// A container root is usually overlayfs, which the pseudo-filesystem filter
+// deliberately excludes, so there is genuinely nothing to report.
+CheckWhere(!isContainerLike, "container root is an overlay, not a real volume",
+    "boot volume present", hardware.Volumes.Any(v => v.IsBootVolume),
     $"{hardware.Volumes.Count} real volumes");
 Check("no pseudo filesystems listed", hardware.Volumes.All(v => v.FileSystem is not ("tmpfs" or "proc" or "sysfs" or "cgroup2")));
 Check("network interfaces enumerated", hardware.NetworkInterfaces.Count > 0,
@@ -414,15 +474,18 @@ Console.WriteLine("\nGPU");
 // ---------------------------------------------------------------------------
 
 var gpu = new GpuProvider();
-Check("DRM subsystem present", gpu.IsAvailable);
+CheckWhere(Directory.Exists("/sys/class/drm"), "no DRM subsystem",
+    "DRM subsystem present", gpu.IsAvailable);
 
 var totalGpu = await gpu.TotalGpuPercentAsync();
-Check("aggregate GPU busy read", totalGpu is not null,
+CheckWhere(gpu.IsAvailable, "no GPU",
+    "aggregate GPU busy read", totalGpu is not null,
     totalGpu is null ? "driver publishes no gpu_busy_percent" : $"{totalGpu:F0}%");
 Check("aggregate GPU busy is in range", totalGpu is null or (>= 0 and <= 100));
 
 var videoMemory = gpu.VideoMemory();
-Check("video memory read", videoMemory is not null,
+CheckWhere(gpu.IsAvailable, "no GPU",
+    "video memory read", videoMemory is not null,
     videoMemory is null ? null : $"{ValueFormat.Bytes(videoMemory.Value.Used)} / {ValueFormat.Bytes(videoMemory.Value.Total)}");
 
 // Per-process needs two samples to produce a rate, as CPU does.
@@ -432,7 +495,8 @@ var firstGpuWalk = gpuWatch.Elapsed;
 await Task.Delay(700);
 var (gpuPercentages, gpuMemory) = gpu.Sample();
 
-Check("per-process GPU clients discovered", gpuMemory.Count > 0 || gpuPercentages.Count > 0,
+CheckWhere(gpu.IsAvailable && !isContainerLike, "no DRM device visible here",
+    "per-process GPU clients discovered", gpuMemory.Count > 0 || gpuPercentages.Count > 0,
     $"{gpuMemory.Count} clients with resident memory, {gpuPercentages.Count} busy");
 
 // A client holding several descriptors reports identical totals on each, so a
@@ -458,7 +522,8 @@ Console.WriteLine("\nAutostart");
 // ---------------------------------------------------------------------------
 
 var autostart = new AutostartProvider();
-Check("autostart index built", autostart.Index.Count > 0, $"{autostart.Index.Count} definitions");
+CheckWhere(hasSystemd, "nothing defines autostart without an init system",
+    "autostart index built", autostart.Index.Count > 0, $"{autostart.Index.Count} definitions");
 
 var resolved = new List<(string Name, string Location)>();
 foreach (var candidate in snapshot.Processes.Values.Where(p => !p.Flags.HasFlag(ProcessFlags.KernelThread)))
@@ -470,9 +535,11 @@ foreach (var candidate in snapshot.Processes.Values.Where(p => !p.Flags.HasFlag(
     }
 }
 
-Check("running processes resolve to autostart definitions", resolved.Count > 0,
+CheckWhere(hasSystemd && !isContainerLike, "no init-managed processes here",
+    "running processes resolve to autostart definitions", resolved.Count > 0,
     $"{resolved.Count} of {snapshot.Processes.Count} processes");
-Check("systemd services resolve", resolved.Any(r => r.Location.StartsWith("systemd", StringComparison.Ordinal)));
+CheckWhere(hasSystemd && !isContainerLike, "no systemd units running here",
+    "systemd services resolve", resolved.Any(r => r.Location.StartsWith("systemd", StringComparison.Ordinal)));
 Check("kernel threads never resolve",
     (await Task.WhenAll(snapshot.Processes.Values
         .Where(p => p.Flags.HasFlag(ProcessFlags.KernelThread))

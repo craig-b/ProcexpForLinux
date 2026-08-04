@@ -41,6 +41,20 @@ public enum HelperOperation
     /// <summary>Read <c>/proc/PID/environ</c>.</summary>
     ReadEnvironment,
 
+    /// <summary>
+    /// Enumerate mapped files from <c>/proc/PID/maps</c>.
+    /// </summary>
+    /// <remarks>
+    /// The helper parses and returns structured rows rather than raw file text.
+    /// Parsing on the privileged side keeps one implementation of a fiddly format
+    /// instead of two, and means the client never has to trust itself to parse
+    /// something it could not read.
+    /// </remarks>
+    ReadModules,
+
+    /// <summary>Enumerate descriptors from <c>/proc/PID/fd</c> and <c>fdinfo</c>.</summary>
+    ReadFileDescriptors,
+
     /// <summary>Send a signal.</summary>
     Signal,
 
@@ -98,4 +112,6 @@ public sealed record HelperResponse
 
 [JsonSerializable(typeof(HelperRequest))]
 [JsonSerializable(typeof(HelperResponse))]
+[JsonSerializable(typeof(IReadOnlyList<Model.ModuleInfo>))]
+[JsonSerializable(typeof(IReadOnlyList<Model.FileDescriptorInfo>))]
 public sealed partial class HelperJsonContext : JsonSerializerContext;

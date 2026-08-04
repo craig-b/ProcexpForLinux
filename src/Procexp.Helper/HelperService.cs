@@ -2,7 +2,9 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using Procexp.Model;
 using Procexp.Privileged;
+using Procexp.Sampling;
 
 namespace Procexp.Helper;
 
@@ -23,6 +25,12 @@ namespace Procexp.Helper;
 internal sealed partial class HelperService(Action<string> log)
 {
     private const int MaxRequestBytes = 8192;
+
+    /// <summary>
+    /// The ordinary sampling engine, used for the detail reads. Running as root
+    /// it succeeds where the client was refused, so there is no second parser.
+    /// </summary>
+    private readonly ProcSampler _sampler = new();
 
     /// <summary>
     /// A cap on environment size. A process can hold megabytes of environment,
@@ -170,6 +178,8 @@ internal sealed partial class HelperService(Action<string> log)
             HelperOperation.ReadIo => ReadProcFile($"/proc/{request.Pid}/io"),
             HelperOperation.ReadProportionalMemory => ReadProcFile($"/proc/{request.Pid}/smaps_rollup"),
             HelperOperation.ReadEnvironment => ReadEnvironment(request.Pid, peer),
+            HelperOperation.ReadModules => ReadModules(request),
+            HelperOperation.ReadFileDescriptors => ReadFileDescriptors(request),
             HelperOperation.Signal => SendSignal(request, peer),
             HelperOperation.SetNice => SetNice(request, peer),
             _ => HelperResponse.Failure("unknown operation"),
@@ -215,6 +225,50 @@ internal sealed partial class HelperService(Action<string> log)
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return HelperResponse.Failure($"could not read the environment of pid {pid}");
+        }
+    }
+
+    /// <summary>
+    /// Mapped files for a process the caller cannot read directly.
+    /// </summary>
+    /// <remarks>
+    /// Reuses the ordinary sampling engine. Running as root it simply succeeds
+    /// where the client was refused, so there is no separate privileged parser to
+    /// keep in step with the unprivileged one.
+    ///
+    /// Unlike the environment, this is not logged per call: the lower pane
+    /// re-reads it on every refresh, and an audit line a second would drown the
+    /// entries that matter.
+    /// </remarks>
+    private HelperResponse ReadModules(HelperRequest request)
+    {
+        try
+        {
+            var modules = _sampler.ModulesAsync(new ProcessId(request.Pid, request.StartTime))
+                .AsTask().GetAwaiter().GetResult();
+
+            return HelperResponse.Success(
+                JsonSerializer.Serialize(modules, HelperJsonContext.Default.IReadOnlyListModuleInfo));
+        }
+        catch (ProviderException e)
+        {
+            return HelperResponse.Failure(e.Message);
+        }
+    }
+
+    private HelperResponse ReadFileDescriptors(HelperRequest request)
+    {
+        try
+        {
+            var descriptors = _sampler.FileDescriptorsAsync(new ProcessId(request.Pid, request.StartTime))
+                .AsTask().GetAwaiter().GetResult();
+
+            return HelperResponse.Success(
+                JsonSerializer.Serialize(descriptors, HelperJsonContext.Default.IReadOnlyListFileDescriptorInfo));
+        }
+        catch (ProviderException e)
+        {
+            return HelperResponse.Failure(e.Message);
         }
     }
 

@@ -14,10 +14,6 @@ runs unprivileged and the helper is optional. It exists for these:
 | `/proc/PID/fd`, `fdinfo` | Same gate. Supplies the handles view. |
 | Signalling other users' processes | Kill, suspend, resume and renice across user boundaries. |
 
-> The maps and fd operations are not yet implemented in the helper protocol —
-> the client reports "not permitted" for other users' processes today. They
-> belong here rather than anywhere else, and the protocol has room for them.
-
 Without the helper, those fields are blank and cross-user actions fail — nothing
 else changes.
 
@@ -84,6 +80,9 @@ functional without it.
 - **pid 1 is refused** outright.
 - **Environment reads are capped** at 512 KiB, so a process with a huge environment
   cannot be used to exhaust the daemon's memory.
+- **Detail reads return parsed rows, not file contents.** The maps and descriptor
+  operations hand back structured records, so the helper never becomes a way to
+  read arbitrary bytes out of a file the caller could not open.
 - The systemd unit drops every capability except `CAP_DAC_READ_SEARCH`, `CAP_KILL`,
   `CAP_SYS_NICE` and `CAP_CHOWN`, sets `NoNewPrivileges`, restricts address families
   to `AF_UNIX`, denies all IP addressing, and applies the `@system-service` syscall

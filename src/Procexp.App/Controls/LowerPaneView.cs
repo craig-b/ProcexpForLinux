@@ -5,7 +5,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Procexp.Model;
-using Procexp.Sampling;
 
 namespace Procexp.App.Controls;
 
@@ -37,7 +36,7 @@ public enum LowerPaneMode
 /// </remarks>
 public sealed class LowerPaneView : UserControl
 {
-    private readonly ProcSampler _sampler;
+    private readonly IProcessDataProvider _sampler;
 
     private readonly DataTableView<ModuleInfo> _modules = new();
     private readonly DataTableView<FileDescriptorInfo> _handles = new();
@@ -64,7 +63,7 @@ public sealed class LowerPaneView : UserControl
     private IReadOnlyList<FileDescriptorInfo> _lastHandles = [];
     private IReadOnlyList<ThreadInfo> _lastThreads = [];
 
-    public LowerPaneView(ProcSampler sampler)
+    public LowerPaneView(IProcessDataProvider sampler)
     {
         _sampler = sampler;
 

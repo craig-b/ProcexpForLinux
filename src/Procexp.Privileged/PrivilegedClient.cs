@@ -148,6 +148,42 @@ public sealed class PrivilegedClient
         return result;
     }
 
+    /// <summary>Mapped files for a process the caller cannot read directly.</summary>
+    public async Task<IReadOnlyList<ModuleInfo>?> ReadModulesAsync(
+        ProcessId id, CancellationToken cancellationToken = default)
+    {
+        var response = await SendAsync(
+            new HelperRequest
+            {
+                Operation = HelperOperation.ReadModules,
+                Pid = id.Pid,
+                StartTime = id.StartTime,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return response.Ok && response.Content is not null
+            ? HelperPayload.Modules(response.Content)
+            : null;
+    }
+
+    /// <summary>Descriptors for a process the caller cannot read directly.</summary>
+    public async Task<IReadOnlyList<FileDescriptorInfo>?> ReadFileDescriptorsAsync(
+        ProcessId id, CancellationToken cancellationToken = default)
+    {
+        var response = await SendAsync(
+            new HelperRequest
+            {
+                Operation = HelperOperation.ReadFileDescriptors,
+                Pid = id.Pid,
+                StartTime = id.StartTime,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return response.Ok && response.Content is not null
+            ? HelperPayload.FileDescriptors(response.Content)
+            : null;
+    }
+
     public async Task SignalAsync(ProcessId id, int signal, CancellationToken cancellationToken = default)
     {
         var response = await SendAsync(

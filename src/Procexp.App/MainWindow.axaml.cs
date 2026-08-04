@@ -19,6 +19,16 @@ namespace Procexp.App;
 public partial class MainWindow : Window
 {
     private readonly ProcSampler _sampler = new();
+
+    /// <summary>
+    /// What the detail views read through. Falls back to the privileged helper
+    /// for the ptrace-gated reads when one is installed, so the UI never has to
+    /// know whether a given process needed it.
+    /// </summary>
+    private readonly IProcessDataProvider _detail =
+        PrivilegedClient.IsAvailable
+            ? new HelperBackedProvider(new ProcSampler(), new PrivilegedClient())
+            : new ProcSampler();
     private readonly ProcessListModel _list = new();
     private readonly HashSet<ProcessId> _collapsed = [];
     private readonly CancellationTokenSource _lifetime = new();
@@ -66,7 +76,7 @@ public partial class MainWindow : Window
 
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
-        _lowerPane = new LowerPaneView(_sampler) { IsDarkMode = _tree.IsDarkMode };
+        _lowerPane = new LowerPaneView(_detail) { IsDarkMode = _tree.IsDarkMode };
         Get<ContentControl>("LowerPaneHost").Content = _lowerPane;
 
         WireTree();

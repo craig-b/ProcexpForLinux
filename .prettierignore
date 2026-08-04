@@ -1,0 +1,26 @@
+# Prettier covers everything CSharpier does not: Markdown, YAML, JSON, and —
+# via prettier-plugin-sh — shell scripts and the ini-shaped files.
+
+# Owned by CSharpier.
+*.cs
+*.axaml
+*.xaml
+*.csproj
+*.props
+*.targets
+*.slnx
+*.sln
+
+# Tool-generated. `dotnet tool install` rewrites this in its own style.
+.config/dotnet-tools.json
+
+# Reflowing hand-drawn path data buys nothing, and Prettier would need the HTML
+# parser forced on to touch it at all.
+*.svg
+
+# Build output and binaries.
+**/obj/
+**/bin/
+artifacts/
+node_modules/
+*.png

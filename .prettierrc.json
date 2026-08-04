@@ -1,0 +1,15 @@
+{
+  "proseWrap": "always",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "endOfLine": "lf",
+  "overrides": [
+    {
+      "files": "*.md",
+      "options": {
+        "tabWidth": 2
+      }
+    }
+  ],
+  "plugins": ["prettier-plugin-sh"]
+}

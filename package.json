@@ -1,0 +1,13 @@
+{
+  "name": "procexp-for-linux-tooling",
+  "private": true,
+  "description": "Formatting tooling only. This is a .NET project; there is no JavaScript in it.",
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "prettier-plugin-sh": "^0.19.0"
+  }
+}

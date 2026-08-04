@@ -15,15 +15,26 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
 
       - name: Restore tools
-        run: dotnet tool restore
+        run: |
+          dotnet tool restore
+          npm ci
 
       # Formatting is checked before building: a formatting failure is instant
       # and unambiguous, and there is no point compiling to find it out later.
+      # Two formatters, split by what they can parse. CSharpier owns C# and the
+      # XML around it; Prettier owns the Markdown, YAML and JSON it cannot.
       - name: Check formatting
-        run: dotnet csharpier check .
+        run: |
+          dotnet csharpier check .
+          npx prettier --check .
 
       # The .editorconfig rules are enforced by the build itself, since
       # EnforceCodeStyleInBuild and TreatWarningsAsErrors are both on — a naming
@@ -50,14 +61,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['debian:13-slim', 'ubuntu:24.04', 'fedora:latest']
+        image: ["debian:13-slim", "ubuntu:24.04", "fedora:latest"]
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
       - name: Install the AOT toolchain
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
@@ -96,11 +107,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # build-release.sh derives the version from git describe
+          fetch-depth: 0 # build-release.sh derives the version from git describe
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
       # Native AOT links real object code, so the runner needs a C toolchain.
       # Without it the publish fails at the link step rather than degrading.

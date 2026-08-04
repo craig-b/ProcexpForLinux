@@ -7,3 +7,5 @@ artifacts/
 TestResults/
 *.AppImage
 
+# Node tooling — formatting only, there is no JavaScript in this project.
+node_modules/

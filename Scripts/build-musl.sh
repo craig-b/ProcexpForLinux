@@ -19,19 +19,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/artifacts/musl"
 IMAGE="mcr.microsoft.com/dotnet/sdk:10.0-alpine"
 
-command -v docker >/dev/null 2>&1 || {
-    echo "docker is required to build musl binaries from a non-Alpine host." >&2
-    echo "On Alpine itself, use Scripts/build-release.sh with RID=linux-musl-x64." >&2
-    exit 1
+command -v docker > /dev/null 2>&1 || {
+  echo "docker is required to build musl binaries from a non-Alpine host." >&2
+  echo "On Alpine itself, use Scripts/build-release.sh with RID=linux-musl-x64." >&2
+  exit 1
 }
 
 rm -rf "${OUT}"
 mkdir -p "${OUT}"
 
 docker run --rm \
-    -v "${ROOT}:/src:ro" \
-    -v "${OUT}:/out" \
-    "${IMAGE}" sh -c '
+  -v "${ROOT}:/src:ro" \
+  -v "${OUT}:/out" \
+  "${IMAGE}" sh -c '
         set -e
         apk add --no-cache clang build-base zlib-dev >/dev/null
 

@@ -3,6 +3,7 @@ using System.Globalization;
 using Procexp.Model;
 using Procexp.Sampling;
 using Procexp.Net;
+using Procexp.Provenance;
 using Procexp.SystemStats;
 
 // Headless smoke-checker for the data layer, mirroring Sources/ProcexpSmoke in
@@ -189,6 +190,64 @@ Check("services name their unit", services.Any(p => p.SystemdUnit is not null),
 var kernelThreads = snapshot.Processes.Values.Where(p => p.Flags.HasFlag(ProcessFlags.KernelThread)).ToList();
 Check("kernel threads detected", kernelThreads.Count > 0, $"{kernelThreads.Count} kernel threads");
 Check("kernel threads have no image", kernelThreads.All(p => p.ExecutablePath is null));
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nProvenance");
+// ---------------------------------------------------------------------------
+
+var provenance = new ProvenanceProvider();
+Check("package manager detected", provenance.PackageManager != PackageManagerKind.None,
+    provenance.PackageManager.ToString());
+
+// A distribution-owned binary must resolve to its package.
+var lsPath = "/usr/bin/ls";
+if (File.Exists(lsPath))
+{
+    var ls = await provenance.ProvenanceAsync(lsPath);
+    Check("distribution binary is attributed to a package",
+        ls.Status == ProvenanceStatus.PackageVerified, ls.DisplayName);
+    Check("package version resolved", ls.PackageVersion is { Length: > 0 }, ls.PackageVersion);
+    Check("build-id read from ELF notes", ls.BuildId is { Length: > 8 }, ls.BuildId);
+
+    // Cross-check the package name against the native tool.
+    var owner = RunCommand("pacman", $"-Qoq {lsPath}")?.Trim()
+                ?? RunCommand("dpkg-query", $"-S {lsPath}")?.Split(':')[0].Trim();
+    if (!string.IsNullOrEmpty(owner))
+    {
+        Check("package name matches the native tool", ls.PackageName == owner,
+            $"ours {ls.PackageName}, tool {owner}");
+    }
+}
+
+// Our own build output is not packaged, and must say so rather than claiming
+// verification it cannot support.
+var ownImage = self?.ExecutablePath;
+if (ownImage is not null)
+{
+    var own = await provenance.ProvenanceAsync(ownImage);
+    Check("unpackaged binary is reported as unpackaged",
+        own.Status == ProvenanceStatus.Unpackaged, own.DisplayName);
+}
+
+// The build-id must be stable across reads and match what the native tool says.
+var elf = ElfInspector.Inspect(lsPath);
+Check("ELF is recognised", elf.IsElf && elf.Is64Bit);
+var readelf = RunCommand("readelf", $"-n {lsPath}");
+if (readelf is not null && readelf.Contains("Build ID", StringComparison.Ordinal))
+{
+    var marker = readelf.IndexOf("Build ID:", StringComparison.Ordinal);
+    var expectedBuildId = readelf[(marker + 9)..].Split('\n')[0].Trim();
+    Check("build-id matches readelf", elf.BuildId == expectedBuildId,
+        $"ours {elf.BuildId}, readelf {expectedBuildId}");
+}
+
+var sha = await ProvenanceProvider.ComputeSha256Async(lsPath);
+Check("SHA-256 computed", sha is { Length: 64 }, sha);
+var sha256sum = RunCommand("sha256sum", lsPath)?.Split(' ')[0];
+if (!string.IsNullOrEmpty(sha256sum))
+{
+    Check("SHA-256 matches sha256sum", sha == sha256sum);
+}
 
 // ---------------------------------------------------------------------------
 Console.WriteLine("\nSockets");

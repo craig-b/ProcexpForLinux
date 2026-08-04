@@ -1,0 +1,13 @@
+# CSharpier owns layout for everything it can format: C# and the XML around it,
+# including the solution file.
+#
+# Verified rather than assumed: MSBuild property values survive reflowing intact
+# (only leading indentation changes) and the build succeeds, and no XAML here
+# carries significant inline text content, so reflowing attributes is safe.
+
+# Build output. CSharpier skips obj/ and bin/ by default, but generated sources
+# under them are the compiler's to format, not ours.
+**/obj/
+**/bin/
+artifacts/
+node_modules/

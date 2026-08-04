@@ -257,6 +257,7 @@ public partial class MainWindow : Window
         WireNice("MenuNiceLowest", 19);
 
         Get<MenuItem>("MenuAbout").Click += (_, _) => _ = ShowAboutAsync();
+        Get<MenuItem>("MenuProperties").Click += (_, _) => ShowProperties();
 
         void WireSpeed(string name, double seconds) =>
             Get<MenuItem>(name).Click += (_, _) => _intervalSeconds = seconds;
@@ -267,6 +268,7 @@ public partial class MainWindow : Window
 
     private void WireContextMenu()
     {
+        Get<MenuItem>("CtxProperties").Click += (_, _) => ShowProperties();
         Get<MenuItem>("CtxKill").Click += (_, _) => _ = KillSelectedAsync(tree: false);
         Get<MenuItem>("CtxKillTree").Click += (_, _) => _ = KillSelectedAsync(tree: true);
         Get<MenuItem>("CtxSuspend").Click += (_, _) => _ = SuspendSelectedAsync();
@@ -289,6 +291,13 @@ public partial class MainWindow : Window
         if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None)
         {
             TogglePause();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None)
+        {
+            ShowProperties();
             e.Handled = true;
             return;
         }
@@ -521,6 +530,25 @@ public partial class MainWindow : Window
             await _actions.SetNiceAsync(process, nice).ConfigureAwait(true);
             await RefreshNowAsync().ConfigureAwait(true);
         }
+    }
+
+    /// <summary>
+    /// Open the Properties window for the selection.
+    /// </summary>
+    /// <remarks>
+    /// Non-modal, and one window per process rather than one shared window, so
+    /// two processes can be compared side by side — which is most of the reason
+    /// to open it at all.
+    /// </remarks>
+    private void ShowProperties()
+    {
+        if (ActionableSelection() is not { } process)
+        {
+            return;
+        }
+
+        var window = new ProcessPropertiesWindow(_detail, process, _tree.IsDarkMode);
+        window.Show(this);
     }
 
     private async Task CopyAsync(string? text)

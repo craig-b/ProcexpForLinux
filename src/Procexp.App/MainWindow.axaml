@@ -46,6 +46,8 @@
       </MenuItem>
 
       <MenuItem Header="_Process">
+        <MenuItem Name="MenuProperties" Header="P_roperties..." InputGesture="Enter" />
+        <Separator />
         <MenuItem Name="MenuKill" Header="_Kill Process" InputGesture="Delete" />
         <MenuItem Name="MenuKillTree" Header="Kill Process _Tree" InputGesture="Shift+Delete" />
         <Separator />
@@ -99,6 +101,8 @@
       <controls:ProcessTreeView Name="Tree" Grid.Row="0" Grid.Column="0">
         <controls:ProcessTreeView.ContextMenu>
           <ContextMenu Name="RowMenu">
+            <MenuItem Name="CtxProperties" Header="Properties..." />
+            <Separator />
             <MenuItem Name="CtxKill" Header="Kill Process" />
             <MenuItem Name="CtxKillTree" Header="Kill Process Tree" />
             <Separator />

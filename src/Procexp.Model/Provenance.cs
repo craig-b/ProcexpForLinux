@@ -62,6 +62,12 @@ public sealed record ProvenanceInfo
     /// <summary>Packager or maintainer identity — the closest analog of a signer.</summary>
     public string? Packager { get; init; }
 
+    /// <summary>
+    /// The owning package's one-line summary, which is what makes the Description
+    /// column worth having — "system and service manager" rather than "systemd".
+    /// </summary>
+    public string? PackageDescription { get; init; }
+
     /// <summary>GNU build-id from the ELF note section, a stable image identity.</summary>
     public string? BuildId { get; init; }
 

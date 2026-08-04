@@ -119,6 +119,7 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
             PackageVersion = owner.Version,
             Repository = owner.Repository,
             Packager = owner.Packager,
+            PackageDescription = owner.Description,
             BuildId = elf.BuildId,
             HasImaSignature = hasIma,
         };

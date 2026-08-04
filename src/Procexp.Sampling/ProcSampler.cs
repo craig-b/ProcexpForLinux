@@ -205,6 +205,7 @@ public sealed class ProcSampler : IProcessDataProvider
         uint gid = 0;
         ulong? swap = null;
         ulong? shared = null;
+        ulong? privateAnon = null;
         ulong? voluntary = null;
         ulong? involuntary = null;
         var threadCount = stat.NumThreads;
@@ -243,6 +244,13 @@ public sealed class ProcSampler : IProcessDataProvider
             if (!vmSwap.IsEmpty)
             {
                 swap = ProcFile.ParseKilobytes(vmSwap);
+            }
+
+            // Free: this file is already open and world-readable.
+            var rssAnon = ProcFile.FindKeyedValue(status, "RssAnon"u8);
+            if (!rssAnon.IsEmpty)
+            {
+                privateAnon = ProcFile.ParseKilobytes(rssAnon);
             }
 
             var rssFile = ProcFile.FindKeyedValue(status, "RssFile"u8);
@@ -408,6 +416,7 @@ public sealed class ProcSampler : IProcessDataProvider
             ResidentSize = (ulong)Math.Max(0, stat.ResidentPages) * (ulong)SystemContext.PageSize,
             VirtualSize = stat.VirtualSize,
             ProportionalSetSize = pss,
+            PrivateSize = privateAnon,
             SharedSize = shared,
             SwapSize = swap,
             MinorFaults = stat.MinorFaults,

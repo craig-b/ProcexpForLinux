@@ -26,4 +26,8 @@
     <ProjectReference Include="../Procexp.Gpu/Procexp.Gpu.csproj" />
     <ProjectReference Include="../Procexp.Privileged/Procexp.Privileged.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Procexp.App.Tests" />
+  </ItemGroup>
+
 </Project>

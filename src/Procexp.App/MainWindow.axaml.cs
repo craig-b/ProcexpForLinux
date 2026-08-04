@@ -48,10 +48,17 @@ public partial class MainWindow : Window
     private readonly SystemStatsProvider _systemStats = new();
     private readonly GpuProvider _gpu = new();
 
+    /// <summary>
+    /// Fills the columns the sweep is too fast to gather: description, company,
+    /// version, provenance, autostart location and per-process GPU.
+    /// </summary>
+    private readonly ProcessEnricher _enricher = new();
+
     private bool _paused;
     private double _intervalSeconds = 1.0;
 
     private AppSettings _settings = SettingsStore.Load();
+    private bool _enrichmentDirty;
     private CancellationTokenSource? _saveDebounce;
 
     private readonly Queue<double> _sweepTimes = new();
@@ -91,6 +98,12 @@ public partial class MainWindow : Window
         // debounce as everything else.
         SizeChanged += (_, _) => ScheduleSave();
 
+        // Enrichment arrives out of band, so the list has to be told. Marshalled
+        // and coalesced: a first sweep queues several hundred image lookups, and
+        // rebuilding per completion would be hundreds of rebuilds.
+        _enricher.Updated += (_, _) => Dispatcher.UIThread.Post(
+            () => _enrichmentDirty = true, DispatcherPriority.Background);
+
         Opened += (_, _) =>
         {
             SetLowerPaneVisible(_settings.ShowLowerPane);
@@ -104,6 +117,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _lifetime.Cancel();
+            _enricher.Dispose();
             SaveSettings();
         };
     }
@@ -476,7 +490,7 @@ public partial class MainWindow : Window
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             Record(_sweepTimes, sweep);
-            _list.Apply(snapshot, DateTimeOffset.Now);
+            _list.Apply(_enricher.Enrich(snapshot), DateTimeOffset.Now);
             Rebuild();
 
             if (Get<ContentControl>("LowerPaneHost").IsVisible)
@@ -508,8 +522,10 @@ public partial class MainWindow : Window
                 {
                     var now = DateTimeOffset.Now;
 
-                    if (_list.Tick(now))
+                    if (_list.Tick(now) || _enrichmentDirty)
                     {
+                        _enrichmentDirty = false;
+                        _list.Apply(_enricher.Enrich(_list.Current), now);
                         Rebuild();
                     }
 

@@ -16,14 +16,17 @@ window, find dialog and settings all function; the data layer is verified agains
 the live kernel on every run of the smoke checker.
 
 Not yet done: per-process network rates (Linux exposes no counter — see
-`Procexp.Net`), GPU memory per process (only some DRM drivers report it), and
-Flatpak/AppImage packaging.
+`Procexp.Net`), GPU memory on most DRM drivers, type-to-select, tooltips,
+interactive column resize and drag-reorder, process icons, and Flatpak/AppImage
+packaging.
 
 ## Screenshot
 
 Process tree with the frozen name pane, independently scrolling metric columns,
 and the Process Explorer row colours — pink for systemd services, blue for your
-own processes.
+own processes. Description, Company and Verified Signer come from the
+distribution package database, filled in behind the sweep rather than blocking
+it.
 
 ![Process Explorer for Linux](docs/screenshot.png)
 

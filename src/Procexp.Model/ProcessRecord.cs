@@ -133,6 +133,21 @@ public sealed record ProcessRecord
     /// </summary>
     public ulong? ProportionalSetSize { get; init; }
 
+    /// <summary>
+    /// Private anonymous resident memory, from <c>RssAnon</c>.
+    /// </summary>
+    /// <remarks>
+    /// The practical Private Bytes source. Unlike proportional set size this is
+    /// world-readable and arrives in <c>/proc/PID/status</c>, which the sweep
+    /// already reads — so it costs nothing and is available for every process
+    /// rather than only the caller's own.
+    ///
+    /// It is also arguably the better analog: Windows Private Bytes is committed
+    /// private memory, which is what anonymous resident memory is, whereas PSS
+    /// divides shared pages among sharers and answers a different question.
+    /// </remarks>
+    public ulong? PrivateSize { get; init; }
+
     public ulong? SharedSize { get; init; }
     public ulong? SwapSize { get; init; }
     public ulong? MinorFaults { get; init; }

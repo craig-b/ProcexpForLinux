@@ -13,5 +13,6 @@
     <ProjectReference Include="../Procexp.Autostart/Procexp.Autostart.csproj" />
     <ProjectReference Include="../Procexp.Actions/Procexp.Actions.csproj" />
     <ProjectReference Include="../Procexp.Gpu/Procexp.Gpu.csproj" />
+    <ProjectReference Include="../Procexp.Privileged/Procexp.Privileged.csproj" />
   </ItemGroup>
 </Project>

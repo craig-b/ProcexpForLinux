@@ -6,6 +6,7 @@ using Procexp.Gpu;
 using Procexp.Model;
 using Procexp.Sampling;
 using Procexp.Net;
+using Procexp.Privileged;
 using Procexp.Provenance;
 using Procexp.SystemStats;
 
@@ -557,6 +558,43 @@ if (service is not null)
     Check("services warn about systemd restart",
         confirmation.Severity >= ConfirmationSeverity.Disruptive && !confirmation.IsRefused,
         Truncate(confirmation.Message, 90));
+}
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nPrivileged helper");
+// ---------------------------------------------------------------------------
+
+var privileged = new PrivilegedClient();
+
+if (PrivilegedClient.IsAvailable)
+{
+    Check("helper handshake succeeds", await privileged.HandshakeAsync());
+
+    if (init is not null)
+    {
+        var io = await privileged.ReadIoAsync(init.Id);
+        Check("helper supplies I/O for a root process", io is not null,
+            io is null ? null : $"read {ValueFormat.Bytes(io.Value.Read)}");
+    }
+}
+else
+{
+    Console.WriteLine("  [SKIP] helper not installed — see docs/HELPER.md");
+
+    // The unavailable path still has to behave.
+    var reported = false;
+    try
+    {
+        await privileged.SignalAsync(new ProcessId(1, 1), Signals.Term);
+    }
+    catch (ProviderException e)
+    {
+        reported = e.Kind == ProviderErrorKind.HelperUnavailable;
+    }
+
+    Check("absent helper reports HelperUnavailable", reported);
+    Check("app works without the helper", snapshot.Processes.Count > 0,
+        "every check above ran unprivileged");
 }
 
 // ---------------------------------------------------------------------------

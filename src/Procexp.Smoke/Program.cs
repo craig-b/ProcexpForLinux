@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
+using Procexp.Actions;
+using Procexp.Autostart;
 using Procexp.Model;
 using Procexp.Sampling;
 using Procexp.Net;
@@ -384,6 +386,132 @@ var nproc = RunCommand("nproc", "")?.Trim();
 if (int.TryParse(nproc, out var expectedCores))
 {
     Check("core count matches nproc", hardware.LogicalCores == expectedCores, $"nproc says {expectedCores}");
+}
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nAutostart");
+// ---------------------------------------------------------------------------
+
+var autostart = new AutostartProvider();
+Check("autostart index built", autostart.Index.Count > 0, $"{autostart.Index.Count} definitions");
+
+var resolved = new List<(string Name, string Location)>();
+foreach (var candidate in snapshot.Processes.Values.Where(p => !p.Flags.HasFlag(ProcessFlags.KernelThread)))
+{
+    var location = await autostart.AutostartLocationAsync(candidate);
+    if (location is not null)
+    {
+        resolved.Add((candidate.Name, location));
+    }
+}
+
+Check("running processes resolve to autostart definitions", resolved.Count > 0,
+    $"{resolved.Count} of {snapshot.Processes.Count} processes");
+Check("systemd services resolve", resolved.Any(r => r.Location.StartsWith("systemd", StringComparison.Ordinal)));
+Check("kernel threads never resolve",
+    (await Task.WhenAll(snapshot.Processes.Values
+        .Where(p => p.Flags.HasFlag(ProcessFlags.KernelThread))
+        .Take(20)
+        .Select(async p => await autostart.AutostartLocationAsync(p))))
+    .All(l => l is null));
+
+foreach (var (name, location) in resolved.DistinctBy(r => r.Location).Take(5))
+{
+    Console.WriteLine($"    {Truncate(name, 22),-22} {location}");
+}
+
+// ---------------------------------------------------------------------------
+Console.WriteLine("\nProcess actions");
+// ---------------------------------------------------------------------------
+
+var actions = new ProcessActions();
+
+// Spawn a victim we own so signalling is exercised for real, without touching
+// anything that matters.
+using (var victim = Process.Start(new ProcessStartInfo("sleep") { ArgumentList = { "300" }, UseShellExecute = false }))
+{
+    if (victim is null)
+    {
+        Console.WriteLine("  [SKIP] could not spawn a test process");
+    }
+    else
+    {
+        await Task.Delay(150);
+
+        var victimSnapshot = await sampler.SnapshotAsync();
+        var victimRecord = victimSnapshot.Processes.Values.FirstOrDefault(p => p.Id.Pid == victim.Id);
+        Check("spawned process appears in a sweep", victimRecord is not null, $"pid {victim.Id}");
+
+        if (victimRecord is not null)
+        {
+            var victimId = victimRecord.Id;
+
+            actions.Suspend(victimId);
+            await Task.Delay(120);
+            var afterSuspend = await sampler.SnapshotAsync();
+            var suspended = afterSuspend.Processes.GetValueOrDefault(victimId);
+            Check("suspend sets the stopped state", suspended?.State is 'T' or 't',
+                $"state {suspended?.State}");
+            Check("suspend sets the Suspended flag",
+                suspended?.Flags.HasFlag(ProcessFlags.Suspended) == true);
+
+            actions.Resume(victimId);
+            await Task.Delay(120);
+            var afterResume = await sampler.SnapshotAsync();
+            var resumed = afterResume.Processes.GetValueOrDefault(victimId);
+            Check("resume clears the stopped state", resumed?.State is not ('T' or 't'),
+                $"state {resumed?.State}");
+
+            actions.SetNice(victimId, 5);
+            await Task.Delay(80);
+            var afterNice = await sampler.SnapshotAsync();
+            Check("renice takes effect", afterNice.Processes.GetValueOrDefault(victimId)?.Nice == 5,
+                $"nice {afterNice.Processes.GetValueOrDefault(victimId)?.Nice}");
+
+            // The identity guard is the safety-critical part: a stale row whose
+            // PID has been recycled must be refused, not signalled.
+            var recycled = victimId with { StartTime = victimId.StartTime + 12345 };
+            var guarded = false;
+            try
+            {
+                actions.Signal(recycled, Signals.Cont);
+            }
+            catch (ProviderException e)
+            {
+                guarded = e.Kind == ProviderErrorKind.ProcessGone;
+            }
+
+            Check("stale identity is refused rather than signalled", guarded,
+                "PID-reuse guard");
+
+            actions.Kill(victimId, Signals.Term);
+            await Task.Delay(200);
+            var afterKill = await sampler.SnapshotAsync();
+            Check("kill terminates the process",
+                afterKill.Processes.GetValueOrDefault(victimId) is null or { State: 'Z' });
+        }
+    }
+}
+
+// Signalling pid 1 must be refused by policy before any syscall happens.
+if (init is not null)
+{
+    var confirmation = ActionConfirmationPolicy.ForKill(init);
+    Check("killing pid 1 is refused by policy", confirmation.IsRefused,
+        confirmation.Message);
+    Check("pid 1 is rated critical", confirmation.Severity == ConfirmationSeverity.Critical);
+}
+
+var selfConfirmation = self is not null ? ActionConfirmationPolicy.ForKill(self) : null;
+Check("killing ourselves is refused by policy", selfConfirmation?.IsRefused == true);
+
+var service = snapshot.Processes.Values.FirstOrDefault(p => p.Flags.HasFlag(ProcessFlags.Service) && p.Id.Pid != 1);
+if (service is not null)
+{
+    var confirmation = ActionConfirmationPolicy.ForKill(service);
+    Check("services warn about systemd restart",
+        confirmation.Severity >= ConfirmationSeverity.Disruptive && !confirmation.IsRefused,
+        Truncate(confirmation.Message, 90));
 }
 
 // ---------------------------------------------------------------------------

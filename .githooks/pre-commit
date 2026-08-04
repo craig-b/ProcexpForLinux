@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#
+# Block a commit that is not formatted.
+#
+# Checks rather than fixes, deliberately. A hook that reformats files behind you
+# changes what you are committing after you have reviewed it, and stages work you
+# did not stage. Refusing the commit and printing the one command that fixes it
+# keeps the decision with the person making it.
+#
+# Enable with Scripts/setup-dev.sh, or:
+#   git config core.hooksPath .githooks
+#
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "${ROOT}"
+
+# Only what is staged. Being blocked by an unrelated dirty file in the working
+# tree would be infuriating and would train people to reach for --no-verify.
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ ${#staged[@]} -eq 0 ]; then
+  exit 0
+fi
+
+fail() {
+  echo
+  echo "  pre-commit: $1"
+  echo "  Fix with:   $2"
+  echo
+  echo "  To bypass this once (it will still fail CI): git commit --no-verify"
+  echo
+  exit 1
+}
+
+# --- CSharpier: C# and the XML around it ------------------------------------
+
+csharpier_files=()
+for f in "${staged[@]}"; do
+  case "$f" in
+    *.cs | *.axaml | *.xaml | *.csproj | *.props | *.targets | *.slnx | *.sln)
+      [ -f "$f" ] && csharpier_files+=("$f")
+      ;;
+  esac
+done
+
+if [ ${#csharpier_files[@]} -gt 0 ]; then
+  if ! dotnet csharpier check "${csharpier_files[@]}" > /dev/null 2>&1; then
+    dotnet csharpier check "${csharpier_files[@]}" 2>&1 | sed 's/^/  /'
+    fail "staged C# or XML is not formatted." "dotnet csharpier format ."
+  fi
+fi
+
+# --- Prettier: everything else it can parse ---------------------------------
+
+# Let Prettier decide what it can handle rather than duplicating the extension
+# list here; --ignore-unknown skips the rest silently.
+prettier_files=()
+for f in "${staged[@]}"; do
+  [ -f "$f" ] && prettier_files+=("$f")
+done
+
+if [ ${#prettier_files[@]} -gt 0 ]; then
+  if ! npx --no-install prettier --check --ignore-unknown "${prettier_files[@]}" > /dev/null 2>&1; then
+    npx --no-install prettier --check --ignore-unknown "${prettier_files[@]}" 2>&1 | sed 's/^/  /'
+    fail "staged files are not Prettier-formatted." "npx prettier --write ."
+  fi
+fi
+
+exit 0

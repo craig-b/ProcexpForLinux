@@ -1,0 +1,22 @@
+# Revisions to skip when running git blame.
+#
+# Both are mechanical reformats that touch nearly every line without changing
+# what any of it means. Verified rather than assumed: across the six documents
+# the Prettier commit reflowed, the prose is word-for-word identical — the only
+# non-whitespace changes are table separator padding and emphasis markers, which
+# render the same. Reflowing prose is no more a content change than rewrapping a
+# method signature.
+#
+# Without this file they sit on top of every blame result, hiding the commit that
+# actually explains each line.
+#
+# Enable locally with Scripts/setup-dev.sh, or:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub, GitLab and Rider honour the file automatically.
+
+# Apply CSharpier
+823ae75da606909533ca856567e77d778c261238
+
+# Add Prettier for the Markdown, YAML, JSON and shell
+cee36853f22e412e9cb9993ed54637b27b7b72cd

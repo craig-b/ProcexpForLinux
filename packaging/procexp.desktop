@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Process Explorer
+GenericName=System Monitor
+Comment=Inspect running processes, their handles, threads and system activity
+Exec=procexp
+Icon=procexp
+Terminal=false
+Categories=System;Monitor;
+Keywords=process;task;monitor;system;performance;cpu;memory;kill;
+StartupNotify=true

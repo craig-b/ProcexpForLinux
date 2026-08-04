@@ -11,7 +11,21 @@ carries over is the architecture, the data contracts, and the feature set.
 
 ## Status
 
-Early. The solution scaffold builds; providers and UI are being filled in.
+Working. The process tree, lower pane, Properties window, System Information
+window, find dialog and settings all function; the data layer is verified against
+the live kernel on every run of the smoke checker.
+
+Not yet done: per-process network rates (Linux exposes no counter — see
+`Procexp.Net`), GPU memory per process (only some DRM drivers report it), and
+Flatpak/AppImage packaging.
+
+## Screenshot
+
+Process tree with the frozen name pane, independently scrolling metric columns,
+and the Process Explorer row colours — pink for systemd services, blue for your
+own processes.
+
+![Process Explorer for Linux](docs/screenshot.png)
 
 ## Layout
 
@@ -32,20 +46,44 @@ Early. The solution scaffold builds; providers and UI are being filled in.
 
 ## Requirements
 
-- .NET 10 SDK
+- .NET 10 SDK to build; released binaries are self-contained and need no runtime
 - A Linux kernel exposing `/proc` (no `hidepid` restriction for full fidelity)
 
-## Build
+## Build and run
 
 ```sh
 dotnet build ProcexpLinux.slnx
+dotnet run --project src/Procexp.App
 ```
 
-Run the headless data-layer check without a GUI:
+Prove the data layer against the live kernel, without a GUI:
 
 ```sh
 dotnet run --project src/Procexp.Smoke
 ```
+
+Release binaries:
+
+```sh
+./Scripts/build-release.sh
+```
+
+See [docs/RELEASE.md](docs/RELEASE.md).
+
+## What needs privilege
+
+Most of `/proc` is world-readable, so the app runs unprivileged and shows the
+full process tree, command lines, and complete per-thread detail for every
+process — the last of which macOS cannot do without a task port.
+
+Six per-process files are gated by `ptrace_may_access` and readable only by the
+owning user: `maps`, `fd`, `fdinfo`, `io`, `smaps_rollup` and `environ`. Without
+the optional privileged helper, the corresponding columns and lower-pane views
+are blank for other users' processes, and say so rather than showing zero.
+
+The helper is optional and **not** enabled by packaging. Membership of its access
+group lets a user read any process's environment, so enabling it is a deliberate
+administrative decision — see [docs/HELPER.md](docs/HELPER.md).
 
 ## Notes on the port
 

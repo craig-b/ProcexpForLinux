@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build ProcexpLinux.slnx --configuration Release --nologo
+
+      - name: Test
+        run: dotnet test ProcexpLinux.slnx --configuration Release --nologo --no-build
+
+      # The smoke checker reads the live /proc of the runner. That is the point:
+      # it exercises the parsers against a real kernel rather than fixtures, and a
+      # container's /proc differs enough from a desktop's to catch assumptions —
+      # far fewer processes, no session, restricted cgroups.
+      - name: Smoke check against the runner's /proc
+        run: dotnet run --project src/Procexp.Smoke --configuration Release --no-build --nologo
+
+  package:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # build-release.sh derives the version from git describe
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build release artifacts
+        run: ./Scripts/build-release.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: procexp-linux-x64
+          path: artifacts/*.tar.gz
+          if-no-files-found: error

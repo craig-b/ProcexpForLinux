@@ -64,10 +64,12 @@ Console.WriteLine("\nCross-check against ps");
 var psCount = RunCommand("ps", "-e --no-headers")?.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
 if (psCount is { } expected)
 {
-    // The two sweeps happen microseconds apart, so exact equality is wrong to
-    // demand; processes genuinely start and exit in between.
+    // The two sweeps happen milliseconds apart, so exact equality is wrong to
+    // demand; processes genuinely start and exit in between. The tolerance has to
+    // be generous because running this through `dotnet run` churns build-server
+    // processes throughout — a tighter bound flaked at a delta of 14.
     var delta = Math.Abs(snapshot.Processes.Count - expected);
-    Check("process count matches ps", delta <= Math.Max(5, expected / 50),
+    Check("process count matches ps", delta <= Math.Max(25, expected / 20),
         $"ours {snapshot.Processes.Count}, ps {expected}, delta {delta}");
 }
 else
@@ -136,7 +138,24 @@ var libc = modules.FirstOrDefault(m =>
     m.Name.StartsWith("ld-linux", StringComparison.Ordinal) ||
     m.Name.StartsWith("ld-musl", StringComparison.Ordinal));
 Check("libc is mapped", libc is not null, libc?.Path);
-Check("module list is not truncated", modules.Count > 20, $"{modules.Count} modules");
+// Compare against the kernel rather than a threshold. A single-file
+// self-contained build embeds the runtime and so maps far fewer distinct
+// files than a framework-dependent one — 19 against 52 here — so any fixed
+// number is wrong for one of them. Counting the distinct file-backed paths
+// in /proc/self/maps is the actual ground truth.
+var distinctMapped = File.ReadLines("/proc/self/maps")
+    .Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+    // Any non-empty pathname, which is the rule ProcMaps itself applies —
+    // including named special regions like [heap] and [vdso]. Counting only
+    // paths beginning with "/" compares a different set and is out by exactly
+    // the number of those regions.
+    .Where(f => f.Length >= 6)
+    .Select(f => string.Join(' ', f[5..]))
+    .Distinct()
+    .Count();
+
+Check("module list matches /proc/self/maps", Math.Abs(modules.Count - distinctMapped) <= 2,
+    $"ours {modules.Count}, kernel {distinctMapped}");
 Check("module sizes are non-zero", modules.All(m => m.Size > 0));
 
 var fds = await sampler.FileDescriptorsAsync(selfId);

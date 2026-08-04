@@ -1,0 +1,48 @@
+# Maintainer: see the repository
+pkgname=procexp
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Sysinternals Process Explorer for Linux"
+arch=('x86_64')
+url="https://github.com/microsoft/ProcexpForLinux"
+license=('MIT')
+
+# Self-contained binaries, so no runtime dependency on dotnet. The build still
+# needs the SDK.
+makedepends=('dotnet-sdk>=10.0' 'git')
+depends=('glibc')
+
+# All optional: absence degrades a column or a tab, never the app.
+optdepends=(
+  'pacman: package provenance for the Verified Signer column'
+  'systemd: unit resolution and the privileged helper'
+  'iproute2: cross-checking sockets by hand'
+)
+
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/ProcexpForLinux"
+  ./Scripts/build-release.sh
+}
+
+check() {
+  cd "$srcdir/ProcexpForLinux"
+  dotnet test ProcexpLinux.slnx --configuration Release --nologo
+}
+
+package() {
+  cd "$srcdir/ProcexpForLinux"
+
+  # build-release.sh already stages a filesystem tree, so packaging is a copy.
+  cp -a artifacts/stage/* "$pkgdir/"
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+  install -Dm644 docs/HELPER.md "$pkgdir/usr/share/doc/$pkgname/HELPER.md"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+
+  # Deliberately not enabled, and the group is not created. Membership grants the
+  # ability to read any process's environment, so it is an administrator's
+  # decision rather than a packaging default. See docs/HELPER.md.
+}

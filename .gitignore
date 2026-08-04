@@ -6,3 +6,6 @@ obj/
 artifacts/
 TestResults/
 *.AppImage
+
+# Release staging
+artifacts/

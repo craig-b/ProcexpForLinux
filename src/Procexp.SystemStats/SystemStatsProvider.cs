@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Procexp.Model;
 
-namespace Procexp.SystemStats;
+namespace Procexp.Metrics;
 
 /// <summary>
 /// System-wide statistics from <c>/proc</c> and <c>/sys</c>.
@@ -36,10 +36,10 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
     private ulong _previousNetworkBytes;
     private long _previousTimestamp;
 
-    public ValueTask<Model.SystemStats> StatsAsync(CancellationToken cancellationToken = default) =>
+    public ValueTask<SystemStats> StatsAsync(CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(Read());
 
-    public Model.SystemStats Read()
+    public SystemStats Read()
     {
         var buffer = ProcReader.Rent(32768);
         try
@@ -67,7 +67,7 @@ public sealed class SystemStatsProvider : ISystemStatsProvider
                 _previousTimestamp = now;
             }
 
-            return new Model.SystemStats
+            return new SystemStats
             {
                 CpuTotalPercent = total,
                 PerCoreCpuPercent = perCore,

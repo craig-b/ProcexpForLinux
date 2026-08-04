@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- The namespace deliberately differs from the assembly name: a
+         Procexp.SystemStats namespace shadows the SystemStats type it carries,
+         forcing every consumer that uses both to qualify one of them. -->
+    <RootNamespace>Procexp.Metrics</RootNamespace>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
   </ItemGroup>

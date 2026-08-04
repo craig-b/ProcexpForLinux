@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Buffers.Text;
 using Microsoft.Win32.SafeHandles;
 
-namespace Procexp.SystemStats;
+namespace Procexp.Metrics;
 
 /// <summary>
 /// Minimal <c>/proc</c> reading and span parsing for the system-wide files.

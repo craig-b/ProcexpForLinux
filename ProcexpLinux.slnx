@@ -15,6 +15,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Procexp.Actions.Tests/Procexp.Actions.Tests.csproj" />
+    <Project Path="tests/Procexp.App.Tests/Procexp.App.Tests.csproj" />
     <Project Path="tests/Procexp.Autostart.Tests/Procexp.Autostart.Tests.csproj" />
     <Project Path="tests/Procexp.Model.Tests/Procexp.Model.Tests.csproj" />
     <Project Path="tests/Procexp.Net.Tests/Procexp.Net.Tests.csproj" />

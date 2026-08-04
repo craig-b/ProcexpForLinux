@@ -7,30 +7,94 @@
 
   <DockPanel>
 
-    <!-- Status bar: process counts plus the frame-time readout the prototype
-         exists to produce. -->
-    <Border DockPanel.Dock="Bottom" Padding="8,4" BorderThickness="0,1,0,0"
-            BorderBrush="#40808080">
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="_File">
+        <MenuItem Name="MenuSave" Header="_Save Process List..." InputGesture="Ctrl+S" />
+        <Separator />
+        <MenuItem Name="MenuExit" Header="E_xit" />
+      </MenuItem>
+
+      <MenuItem Header="_Options">
+        <MenuItem Name="MenuAlwaysOnTop" Header="Always On _Top" ToggleType="CheckBox" />
+        <MenuItem Name="MenuHighlight" Header="_Highlight New and Deleted"
+                  ToggleType="CheckBox" IsChecked="True" />
+        <Separator />
+        <MenuItem Name="MenuInstallHelper" Header="_Privileged Helper Status..." />
+      </MenuItem>
+
+      <MenuItem Header="_View">
+        <MenuItem Name="MenuPause" Header="_Pause" InputGesture="Space" ToggleType="CheckBox" />
+        <MenuItem Name="MenuRefreshNow" Header="_Update Now" InputGesture="F5" />
+        <Separator />
+        <MenuItem Name="MenuTreeMode" Header="Show Process _Tree"
+                  ToggleType="CheckBox" IsChecked="True" InputGesture="Ctrl+T" />
+        <Separator />
+        <MenuItem Header="Update _Speed">
+          <MenuItem Name="MenuSpeedFast" Header="_Fast (0.5 s)" ToggleType="Radio" GroupName="Speed" />
+          <MenuItem Name="MenuSpeedNormal" Header="_Normal (1 s)" ToggleType="Radio" GroupName="Speed" IsChecked="True" />
+          <MenuItem Name="MenuSpeedSlow" Header="_Slow (2 s)" ToggleType="Radio" GroupName="Speed" />
+          <MenuItem Name="MenuSpeedVerySlow" Header="_Very Slow (5 s)" ToggleType="Radio" GroupName="Speed" />
+        </MenuItem>
+      </MenuItem>
+
+      <MenuItem Header="_Process">
+        <MenuItem Name="MenuKill" Header="_Kill Process" InputGesture="Delete" />
+        <MenuItem Name="MenuKillTree" Header="Kill Process _Tree" InputGesture="Shift+Delete" />
+        <Separator />
+        <MenuItem Name="MenuSuspend" Header="_Suspend" />
+        <MenuItem Name="MenuResume" Header="_Resume" />
+        <MenuItem Name="MenuRestart" Header="Res_tart" />
+        <Separator />
+        <MenuItem Header="Set _Priority">
+          <MenuItem Name="MenuNiceHighest" Header="Highest (nice -20)" />
+          <MenuItem Name="MenuNiceHigh" Header="Above Normal (nice -5)" />
+          <MenuItem Name="MenuNiceNormal" Header="Normal (nice 0)" />
+          <MenuItem Name="MenuNiceLow" Header="Below Normal (nice 5)" />
+          <MenuItem Name="MenuNiceLowest" Header="Lowest (nice 19)" />
+        </MenuItem>
+      </MenuItem>
+
+      <MenuItem Header="_Help">
+        <MenuItem Name="MenuAbout" Header="_About Process Explorer" />
+      </MenuItem>
+    </Menu>
+
+    <Border DockPanel.Dock="Bottom" Padding="8,4" BorderThickness="0,1,0,0" BorderBrush="#40808080">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Name="StatusText" FontSize="11" VerticalAlignment="Center" />
         <TextBlock Name="TimingText" Grid.Column="1" FontSize="11"
-                   FontFamily="monospace" VerticalAlignment="Center" />
+                   FontFamily="monospace" VerticalAlignment="Center" Opacity="0.7" />
       </Grid>
     </Border>
 
-    <Border DockPanel.Dock="Top" Padding="8,6" BorderThickness="0,0,0,1"
-            BorderBrush="#40808080">
+    <Border DockPanel.Dock="Top" Padding="8,6" BorderThickness="0,0,0,1" BorderBrush="#40808080">
       <StackPanel Orientation="Horizontal" Spacing="8">
         <Button Name="PauseButton" Content="Pause" MinWidth="80" />
-        <ToggleSwitch Name="TreeToggle" IsChecked="True"
-                      OnContent="Tree" OffContent="Flat" MinWidth="90" />
-        <TextBlock Text="Refresh" VerticalAlignment="Center" Margin="12,0,0,0" />
-        <ComboBox Name="IntervalCombo" SelectedIndex="1" MinWidth="90" />
+        <Button Name="RefreshButton" Content="Refresh" MinWidth="80" />
+        <Rectangle Width="1" Margin="4,2" Fill="#40808080" />
+        <Button Name="KillButton" Content="Kill" MinWidth="70" />
+        <Button Name="SuspendButton" Content="Suspend" MinWidth="80" />
+        <Rectangle Width="1" Margin="4,2" Fill="#40808080" />
+        <ToggleSwitch Name="TreeToggle" IsChecked="True" OnContent="Tree" OffContent="Flat" MinWidth="90" />
       </StackPanel>
     </Border>
 
     <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
-      <controls:ProcessTreeView Name="Tree" Grid.Row="0" Grid.Column="0" />
+      <controls:ProcessTreeView Name="Tree" Grid.Row="0" Grid.Column="0">
+        <controls:ProcessTreeView.ContextMenu>
+          <ContextMenu Name="RowMenu">
+            <MenuItem Name="CtxKill" Header="Kill Process" />
+            <MenuItem Name="CtxKillTree" Header="Kill Process Tree" />
+            <Separator />
+            <MenuItem Name="CtxSuspend" Header="Suspend" />
+            <MenuItem Name="CtxResume" Header="Resume" />
+            <MenuItem Name="CtxRestart" Header="Restart" />
+            <Separator />
+            <MenuItem Name="CtxCopyPath" Header="Copy Path" />
+            <MenuItem Name="CtxCopyCommandLine" Header="Copy Command Line" />
+          </ContextMenu>
+        </controls:ProcessTreeView.ContextMenu>
+      </controls:ProcessTreeView>
 
       <ScrollBar Name="VerticalScroll" Grid.Row="0" Grid.Column="1"
                  Orientation="Vertical" Visibility="Visible" />

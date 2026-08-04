@@ -8,7 +8,7 @@ using Procexp.Sampling;
 using Procexp.Net;
 using Procexp.Privileged;
 using Procexp.Provenance;
-using Procexp.SystemStats;
+using Procexp.Metrics;
 
 // Headless smoke-checker for the data layer, mirroring Sources/ProcexpSmoke in
 // the macOS project. It exercises the providers without a GUI so the sampling

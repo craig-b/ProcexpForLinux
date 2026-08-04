@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Net.NetworkInformation;
 
-namespace Procexp.SystemStats;
+namespace Procexp.Metrics;
 
 /// <summary>One mounted filesystem, for the System Information window.</summary>
 public sealed record VolumeInfo

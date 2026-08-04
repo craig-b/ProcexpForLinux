@@ -2,39 +2,38 @@ using System.Diagnostics;
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
-using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Procexp.App.Controls;
+using Procexp.App.Dialogs;
 using Procexp.Model;
+using Procexp.Privileged;
 using Procexp.Sampling;
 
 namespace Procexp.App;
 
 public partial class MainWindow : Window
 {
-    private static readonly double[] Intervals = [0.5, 1.0, 2.0, 5.0];
-
     private readonly ProcSampler _sampler = new();
+    private readonly ProcessListModel _list = new();
     private readonly HashSet<ProcessId> _collapsed = [];
     private readonly CancellationTokenSource _lifetime = new();
 
+    private ActionCoordinator _actions = null!;
     private ProcessTreeView _tree = null!;
     private ScrollBar _verticalScroll = null!;
     private ScrollBar _horizontalScroll = null!;
     private TextBlock _statusText = null!;
     private TextBlock _timingText = null!;
-    private Button _pauseButton = null!;
-    private ToggleSwitch _treeToggle = null!;
-    private ComboBox _intervalCombo = null!;
 
-    private ProcessSnapshot _snapshot = ProcessSnapshot.Empty;
     private bool _paused;
+    private double _intervalSeconds = 1.0;
 
-    // Rolling measurements, which are the entire point of this prototype.
-    private readonly Queue<double> _flattenTimes = new();
     private readonly Queue<double> _sweepTimes = new();
+    private readonly Queue<double> _layoutTimes = new();
 
     private IReadOnlyList<(Column Column, double Width)> _columns = [];
 
@@ -42,21 +41,15 @@ public partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
 
-        _tree = this.FindControl<ProcessTreeView>("Tree")!;
-        _verticalScroll = this.FindControl<ScrollBar>("VerticalScroll")!;
-        _horizontalScroll = this.FindControl<ScrollBar>("HorizontalScroll")!;
-        _statusText = this.FindControl<TextBlock>("StatusText")!;
-        _timingText = this.FindControl<TextBlock>("TimingText")!;
-        _pauseButton = this.FindControl<Button>("PauseButton")!;
-        _treeToggle = this.FindControl<ToggleSwitch>("TreeToggle")!;
-        _intervalCombo = this.FindControl<ComboBox>("IntervalCombo")!;
+        _actions = new ActionCoordinator(this);
+        _tree = Get<ProcessTreeView>("Tree");
+        _verticalScroll = Get<ScrollBar>("VerticalScroll");
+        _horizontalScroll = Get<ScrollBar>("HorizontalScroll");
+        _statusText = Get<TextBlock>("StatusText");
+        _timingText = Get<TextBlock>("TimingText");
 
-        _intervalCombo.ItemsSource = Intervals
-            .Select(i => string.Create(CultureInfo.InvariantCulture, $"{i:0.#} s"))
-            .ToList();
+        Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
 
-        // A deliberately wide default set, so the horizontal scrolling this
-        // prototype is testing has something to scroll.
         _columns =
         [
             (Column.Name, _tree.NamePaneWidth),
@@ -71,11 +64,28 @@ public partial class MainWindow : Window
 
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
-        // Keep the horizontal scrollbar aligned with the metric columns it
-        // actually scrolls, rather than letting it run under the frozen pane.
-        this.FindControl<Border>("ScrollGutter")!.Width = _tree.NamePaneWidth;
+        WireTree();
+        WireToolbar();
+        WireMenus();
+        WireContextMenu();
 
-        _tree.SelectionChanged += (_, process) => UpdateStatus(process);
+        Opened += (_, _) =>
+        {
+            _ = RunSamplingLoopAsync();
+            _ = RunHighlightTickerAsync();
+        };
+
+        Closed += (_, _) => _lifetime.Cancel();
+    }
+
+    private T Get<T>(string name) where T : Control => this.FindControl<T>(name)!;
+
+    // ---- Wiring -------------------------------------------------------------
+
+    private void WireTree()
+    {
+        _tree.SelectionChanged += (_, _) => UpdateStatus();
+
         _tree.ToggleRequested += (_, id) =>
         {
             if (!_collapsed.Remove(id))
@@ -95,7 +105,10 @@ public partial class MainWindow : Window
             else
             {
                 _tree.SortColumn = column;
-                _tree.SortDescending = column != Column.Name;
+
+                // Text sorts ascending and numbers descending by default, which is
+                // what puts the busiest process at the top on the first click.
+                _tree.SortDescending = Columns.IsRightAligned(column);
             }
 
             Rebuild();
@@ -103,19 +116,106 @@ public partial class MainWindow : Window
 
         _verticalScroll.Scroll += (_, _) => _tree.VerticalOffset = _verticalScroll.Value;
         _horizontalScroll.Scroll += (_, _) => _tree.HorizontalOffset = _horizontalScroll.Value;
+    }
 
-        _pauseButton.Click += (_, _) =>
+    private void WireToolbar()
+    {
+        Get<Button>("PauseButton").Click += (_, _) => TogglePause();
+        Get<Button>("RefreshButton").Click += (_, _) => _ = RefreshNowAsync();
+        Get<Button>("KillButton").Click += (_, _) => _ = KillSelectedAsync(tree: false);
+        Get<Button>("SuspendButton").Click += (_, _) => _ = SuspendSelectedAsync();
+
+        var treeToggle = Get<ToggleSwitch>("TreeToggle");
+        treeToggle.IsCheckedChanged += (_, _) =>
         {
-            _paused = !_paused;
-            _pauseButton.Content = _paused ? "Resume" : "Pause";
+            Get<MenuItem>("MenuTreeMode").IsChecked = treeToggle.IsChecked == true;
+            Rebuild();
+        };
+    }
+
+    private void WireMenus()
+    {
+        Get<MenuItem>("MenuExit").Click += (_, _) => Close();
+        Get<MenuItem>("MenuSave").Click += (_, _) => _ = SaveProcessListAsync();
+
+        var alwaysOnTop = Get<MenuItem>("MenuAlwaysOnTop");
+        alwaysOnTop.Click += (_, _) => Topmost = alwaysOnTop.IsChecked;
+
+        var highlight = Get<MenuItem>("MenuHighlight");
+        highlight.Click += (_, _) => _list.HighlightNewAndDead = highlight.IsChecked;
+
+        Get<MenuItem>("MenuInstallHelper").Click += (_, _) => _ = ShowHelperStatusAsync();
+
+        var pause = Get<MenuItem>("MenuPause");
+        pause.Click += (_, _) => SetPaused(pause.IsChecked);
+
+        Get<MenuItem>("MenuRefreshNow").Click += (_, _) => _ = RefreshNowAsync();
+
+        var treeMode = Get<MenuItem>("MenuTreeMode");
+        treeMode.Click += (_, _) =>
+        {
+            Get<ToggleSwitch>("TreeToggle").IsChecked = treeMode.IsChecked;
+            Rebuild();
         };
 
-        _treeToggle.IsCheckedChanged += (_, _) => Rebuild();
-        _intervalCombo.SelectionChanged += (_, _) => { /* picked up by the sampling loop */ };
+        WireSpeed("MenuSpeedFast", 0.5);
+        WireSpeed("MenuSpeedNormal", 1.0);
+        WireSpeed("MenuSpeedSlow", 2.0);
+        WireSpeed("MenuSpeedVerySlow", 5.0);
 
-        Opened += (_, _) => _ = RunSamplingLoopAsync();
-        Closed += (_, _) => _lifetime.Cancel();
+        Get<MenuItem>("MenuKill").Click += (_, _) => _ = KillSelectedAsync(tree: false);
+        Get<MenuItem>("MenuKillTree").Click += (_, _) => _ = KillSelectedAsync(tree: true);
+        Get<MenuItem>("MenuSuspend").Click += (_, _) => _ = SuspendSelectedAsync();
+        Get<MenuItem>("MenuResume").Click += (_, _) => _ = ResumeSelectedAsync();
+        Get<MenuItem>("MenuRestart").Click += (_, _) => _ = RestartSelectedAsync();
+
+        WireNice("MenuNiceHighest", -20);
+        WireNice("MenuNiceHigh", -5);
+        WireNice("MenuNiceNormal", 0);
+        WireNice("MenuNiceLow", 5);
+        WireNice("MenuNiceLowest", 19);
+
+        Get<MenuItem>("MenuAbout").Click += (_, _) => _ = ShowAboutAsync();
+
+        void WireSpeed(string name, double seconds) =>
+            Get<MenuItem>(name).Click += (_, _) => _intervalSeconds = seconds;
+
+        void WireNice(string name, int nice) =>
+            Get<MenuItem>(name).Click += (_, _) => _ = SetNiceSelectedAsync(nice);
     }
+
+    private void WireContextMenu()
+    {
+        Get<MenuItem>("CtxKill").Click += (_, _) => _ = KillSelectedAsync(tree: false);
+        Get<MenuItem>("CtxKillTree").Click += (_, _) => _ = KillSelectedAsync(tree: true);
+        Get<MenuItem>("CtxSuspend").Click += (_, _) => _ = SuspendSelectedAsync();
+        Get<MenuItem>("CtxResume").Click += (_, _) => _ = ResumeSelectedAsync();
+        Get<MenuItem>("CtxRestart").Click += (_, _) => _ = RestartSelectedAsync();
+
+        Get<MenuItem>("CtxCopyPath").Click += (_, _) =>
+            _ = CopyAsync(_tree.SelectedProcess?.ExecutablePath);
+
+        Get<MenuItem>("CtxCopyCommandLine").Click += (_, _) =>
+            _ = CopyAsync(_tree.SelectedProcess?.CommandLine);
+    }
+
+    // ---- Keyboard -----------------------------------------------------------
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        // Space pauses, as it does in Process Explorer. Handled here rather than
+        // as a menu gesture so it works whatever has focus inside the window.
+        if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None)
+        {
+            TogglePause();
+            e.Handled = true;
+            return;
+        }
+
+        base.OnKeyDown(e);
+    }
+
+    // ---- Sampling -----------------------------------------------------------
 
     private async Task RunSamplingLoopAsync()
     {
@@ -123,23 +223,13 @@ public partial class MainWindow : Window
         {
             if (!_paused)
             {
-                var watch = Stopwatch.StartNew();
-                var snapshot = await _sampler.SnapshotAsync(_lifetime.Token).ConfigureAwait(false);
-                var sweep = watch.Elapsed.TotalMilliseconds;
-
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    Record(_sweepTimes, sweep);
-                    _snapshot = snapshot;
-                    Rebuild();
-                });
+                await SampleOnceAsync().ConfigureAwait(false);
             }
-
-            var seconds = Intervals[Math.Clamp(_intervalCombo.SelectedIndex, 0, Intervals.Length - 1)];
 
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(seconds), _lifetime.Token).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(_intervalSeconds), _lifetime.Token)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -148,22 +238,102 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task SampleOnceAsync()
+    {
+        var watch = Stopwatch.StartNew();
+        ProcessSnapshot snapshot;
+
+        try
+        {
+            snapshot = await _sampler.SnapshotAsync(_lifetime.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        var sweep = watch.Elapsed.TotalMilliseconds;
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Record(_sweepTimes, sweep);
+            _list.Apply(snapshot, DateTimeOffset.Now);
+            Rebuild();
+        });
+    }
+
+    /// <summary>
+    /// Fades highlights out between sweeps.
+    /// </summary>
+    /// <remarks>
+    /// Runs faster than the sampling interval so a one-second tint does not
+    /// linger for a whole slow refresh cycle. It repaints only when something
+    /// actually expired.
+    /// </remarks>
+    private async Task RunHighlightTickerAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_lifetime.Token).ConfigureAwait(false))
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (_list.Tick(DateTimeOffset.Now))
+                    {
+                        Rebuild();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Window closed.
+        }
+    }
+
+    private async Task RefreshNowAsync()
+    {
+        if (!_paused)
+        {
+            await SampleOnceAsync().ConfigureAwait(true);
+            return;
+        }
+
+        // Refreshing while paused takes one sample without resuming, which is
+        // how Process Explorer's Update Now behaves.
+        await SampleOnceAsync().ConfigureAwait(true);
+    }
+
+    private void TogglePause() => SetPaused(!_paused);
+
+    private void SetPaused(bool paused)
+    {
+        _paused = paused;
+        Get<Button>("PauseButton").Content = paused ? "Resume" : "Pause";
+        Get<MenuItem>("MenuPause").IsChecked = paused;
+        UpdateStatus();
+    }
+
+    // ---- Rendering ----------------------------------------------------------
+
     private void Rebuild()
     {
         var watch = Stopwatch.StartNew();
 
         var rows = RowFlattener.Flatten(
-            _snapshot,
+            _list.AsSnapshot(),
             _collapsed,
             _tree.SortColumn,
             _tree.SortDescending,
-            treeMode: _treeToggle.IsChecked == true);
+            treeMode: Get<ToggleSwitch>("TreeToggle").IsChecked == true);
 
         _tree.SetRows(rows, _columns);
-        Record(_flattenTimes, watch.Elapsed.TotalMilliseconds);
+        Record(_layoutTimes, watch.Elapsed.TotalMilliseconds);
 
         SyncScrollBars();
-        UpdateStatus(_tree.SelectedProcess);
+        UpdateStatus();
     }
 
     private void SyncScrollBars()
@@ -179,31 +349,173 @@ public partial class MainWindow : Window
         _horizontalScroll.Value = _tree.HorizontalOffset;
     }
 
-    private void UpdateStatus(ProcessRecord? selected)
+    private void UpdateStatus()
     {
-        var processes = _snapshot.Processes.Count;
-        var threads = _snapshot.System.ThreadCount;
+        var snapshot = _list.Current;
+        var selected = _tree.SelectedProcess;
+
+        var prefix = _paused ? "PAUSED    —    " : "";
 
         _statusText.Text = selected is null
-            ? $"{processes} processes, {threads} threads"
-            : $"{processes} processes, {threads} threads    —    " +
+            ? $"{prefix}{snapshot.Processes.Count} processes, {snapshot.System.ThreadCount} threads"
+            : $"{prefix}{snapshot.Processes.Count} processes, {snapshot.System.ThreadCount} threads    —    " +
               $"{selected.Name} (pid {selected.Id.Pid}), {selected.ThreadCount} threads, " +
               $"{ValueFormat.Bytes(selected.ResidentSize)}";
 
-        var timing = string.Create(
+        _timingText.Text = string.Create(
             CultureInfo.InvariantCulture,
-            $"sweep {Average(_sweepTimes),6:F1} ms   layout {Average(_flattenTimes),5:F2} ms   " +
+            $"sweep {Average(_sweepTimes),6:F1} ms   layout {Average(_layoutTimes),5:F2} ms   " +
             $"paint {_tree.AverageRenderMilliseconds,5:F2} ms   " +
-            $"{_tree.LastRenderedRowCount}/{processes} rows drawn");
-
-        _timingText.Text = timing;
-
-        // Also to stdout, so the prototype's numbers can be captured without
-        // having to read them off the screen.
-        Console.WriteLine(timing);
+            $"{_tree.LastRenderedRowCount}/{snapshot.Processes.Count} rows drawn");
     }
 
-    /// <summary>Keep a short rolling window so the readout is stable but current.</summary>
+    // ---- Actions ------------------------------------------------------------
+
+    /// <summary>
+    /// The selected process, or null when the selection refers to a row that is
+    /// only still on screen because it is fading out.
+    /// </summary>
+    private ProcessRecord? ActionableSelection()
+    {
+        var selected = _tree.SelectedProcess;
+        if (selected is null)
+        {
+            return null;
+        }
+
+        // Acting on a ghost row would signal a process that has already exited,
+        // or worse, whatever has since inherited its pid.
+        return _list.IsDead(selected.Id) ? null : selected;
+    }
+
+    private async Task KillSelectedAsync(bool tree)
+    {
+        if (ActionableSelection() is { } process)
+        {
+            await _actions.KillAsync(process, tree, _list.Current).ConfigureAwait(true);
+            await RefreshNowAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task SuspendSelectedAsync()
+    {
+        if (ActionableSelection() is { } process)
+        {
+            await _actions.SuspendAsync(process).ConfigureAwait(true);
+            await RefreshNowAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task ResumeSelectedAsync()
+    {
+        if (ActionableSelection() is { } process)
+        {
+            await _actions.ResumeAsync(process).ConfigureAwait(true);
+            await RefreshNowAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task RestartSelectedAsync()
+    {
+        if (ActionableSelection() is { } process)
+        {
+            await _actions.RestartAsync(process, _list.Current).ConfigureAwait(true);
+            await RefreshNowAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task SetNiceSelectedAsync(int nice)
+    {
+        if (ActionableSelection() is { } process)
+        {
+            await _actions.SetNiceAsync(process, nice).ConfigureAwait(true);
+            await RefreshNowAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task CopyAsync(string? text)
+    {
+        if (!string.IsNullOrEmpty(text) && Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(text).ConfigureAwait(true);
+        }
+    }
+
+    // ---- Dialogs ------------------------------------------------------------
+
+    private async Task SaveProcessListAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new()
+        {
+            Title = "Save Process List",
+            SuggestedFileName = "processes.txt",
+        }).ConfigureAwait(true);
+
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var rows = RowFlattener.Flatten(
+                _list.AsSnapshot(), _collapsed, _tree.SortColumn, _tree.SortDescending, treeMode: true);
+
+            await using var stream = await file.OpenWriteAsync().ConfigureAwait(true);
+            await using var writer = new StreamWriter(stream);
+
+            await writer.WriteLineAsync(string.Join('\t', _columns.Select(c => Columns.Title(c.Column))))
+                .ConfigureAwait(true);
+
+            foreach (var row in rows)
+            {
+                var indent = new string(' ', row.Depth * 2);
+                var cells = _columns.Select((c, i) =>
+                    i == 0 ? indent + Columns.Format(c.Column, row.Process) : Columns.Format(c.Column, row.Process));
+
+                await writer.WriteLineAsync(string.Join('\t', cells)).ConfigureAwait(true);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            await ConfirmationDialog.ShowMessageAsync(this, "Save Process List", $"Could not write the file: {e.Message}")
+                .ConfigureAwait(true);
+        }
+    }
+
+    private async Task ShowHelperStatusAsync()
+    {
+        var available = PrivilegedClient.IsAvailable;
+        var reachable = available && await new PrivilegedClient().HandshakeAsync().ConfigureAwait(true);
+
+        var message = (available, reachable) switch
+        {
+            (false, _) =>
+                "The privileged helper is not installed.\n\n" +
+                "Without it, I/O counters, proportional memory and environments are blank " +
+                "for other users' processes, and cross-user actions fail. Everything else works.\n\n" +
+                "See docs/HELPER.md to install it.",
+            (true, false) =>
+                $"The helper socket exists but did not respond.\n\n" +
+                $"You may not be a member of the '{HelperConstants.AccessGroup}' group, " +
+                "or the helper may be a different version.",
+            _ => "The privileged helper is installed and responding.",
+        };
+
+        await ConfirmationDialog.ShowMessageAsync(this, "Privileged Helper", message).ConfigureAwait(true);
+    }
+
+    private Task ShowAboutAsync() =>
+        ConfirmationDialog.ShowMessageAsync(
+            this,
+            "About Process Explorer",
+            "Sysinternals Process Explorer for Linux\n\n" +
+            "A Linux implementation of the Process Explorer experience, built on /proc.\n\n" +
+            $"Running on {Environment.OSVersion.VersionString}\n" +
+            $".NET {Environment.Version}");
+
+    // ---- Helpers ------------------------------------------------------------
+
     private static void Record(Queue<double> samples, double value)
     {
         samples.Enqueue(value);

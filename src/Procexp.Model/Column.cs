@@ -164,8 +164,12 @@ public static class Columns
     public static double DefaultWidth(Column c) => c switch
     {
         Column.Name => 260,
-        Column.Pid => 58,
-        Column.Ppid => 78,
+
+        // Wider than the macOS defaults of 58 and 78. Darwin caps pids at 99999,
+        // but Linux pid_max defaults to 4194304 on 64-bit — seven digits — so the
+        // inherited widths truncate real pids on a long-running machine.
+        Column.Pid => 78,
+        Column.Ppid => 92,
         Column.Cpu => 54,
         Column.CpuTime => 88,
         Column.PrivateBytes or Column.WorkingSet or Column.VirtualSize

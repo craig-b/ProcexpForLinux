@@ -1,9 +1,49 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Procexp.App.Controls"
         x:Class="Procexp.App.MainWindow"
         Title="Process Explorer"
-        Width="1100" Height="700">
-  <TextBlock Margin="16"
-             VerticalAlignment="Center" HorizontalAlignment="Center"
-             Text="Process Explorer for Linux — scaffold." />
+        Width="1200" Height="760">
+
+  <DockPanel>
+
+    <!-- Status bar: process counts plus the frame-time readout the prototype
+         exists to produce. -->
+    <Border DockPanel.Dock="Bottom" Padding="8,4" BorderThickness="0,1,0,0"
+            BorderBrush="#40808080">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Name="StatusText" FontSize="11" VerticalAlignment="Center" />
+        <TextBlock Name="TimingText" Grid.Column="1" FontSize="11"
+                   FontFamily="monospace" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <Border DockPanel.Dock="Top" Padding="8,6" BorderThickness="0,0,0,1"
+            BorderBrush="#40808080">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Name="PauseButton" Content="Pause" MinWidth="80" />
+        <ToggleSwitch Name="TreeToggle" IsChecked="True"
+                      OnContent="Tree" OffContent="Flat" MinWidth="90" />
+        <TextBlock Text="Refresh" VerticalAlignment="Center" Margin="12,0,0,0" />
+        <ComboBox Name="IntervalCombo" SelectedIndex="1" MinWidth="90" />
+      </StackPanel>
+    </Border>
+
+    <Grid ColumnDefinitions="*,Auto" RowDefinitions="*,Auto">
+      <controls:ProcessTreeView Name="Tree" Grid.Row="0" Grid.Column="0" />
+
+      <ScrollBar Name="VerticalScroll" Grid.Row="0" Grid.Column="1"
+                 Orientation="Vertical" Visibility="Visible" />
+
+      <!-- Horizontal scrolling applies only to the metric columns, so the bar
+           starts where the frozen name pane ends rather than spanning the width.
+           A bar under the frozen pane would imply it scrolls too. -->
+      <Grid Grid.Row="1" Grid.Column="0" ColumnDefinitions="Auto,*">
+        <Border Name="ScrollGutter" Grid.Column="0" />
+        <ScrollBar Name="HorizontalScroll" Grid.Column="1"
+                   Orientation="Horizontal" Visibility="Visible" />
+      </Grid>
+    </Grid>
+
+  </DockPanel>
 </Window>

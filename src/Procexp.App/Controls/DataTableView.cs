@@ -58,6 +58,47 @@ public sealed class DataTableView<T> : VirtualTableBase
     /// </summary>
     public Func<T, string?>? SearchTextOf { get; set; }
 
+    /// <summary>Optional richer tooltip for a row, overriding the trimmed-cell default.</summary>
+    public Func<T, string?>? TooltipOf { get; set; }
+
+    /// <summary>
+    /// The cell's own text when it does not fit, so a truncated path or name
+    /// can be read without widening the column.
+    /// </summary>
+    protected override string? TooltipFor(int row, Point point)
+    {
+        if (row < 0 || row >= _rows.Count)
+        {
+            return null;
+        }
+
+        if (TooltipOf?.Invoke(_rows[row]) is { Length: > 0 } custom)
+        {
+            return custom;
+        }
+
+        var x = point.X + HorizontalOffset;
+        double accumulated = 0;
+
+        foreach (var column in _columns)
+        {
+            accumulated += column.Width;
+            if (x < accumulated)
+            {
+                var text = column.Format(_rows[row]);
+                return IsTruncated(text, column.Width) ? text : null;
+            }
+        }
+
+        return null;
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        UpdateTooltip(e.GetPosition(this));
+    }
+
     protected override string? RowSearchText(int row)
     {
         if (row < 0 || row >= _rows.Count)

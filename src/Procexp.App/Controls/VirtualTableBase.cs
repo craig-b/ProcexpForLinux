@@ -342,6 +342,75 @@ public abstract class VirtualTableBase : Control
         e.Handled = true;
     }
 
+    // --- Tooltips ----------------------------------------------------------
+
+    private int _tooltipRow = -1;
+    private double _tooltipX = double.NaN;
+
+    /// <summary>
+    /// Tooltip text for a point inside the rows area, or null for none. The
+    /// row index is supplied since every implementation needs it.
+    /// </summary>
+    protected virtual string? TooltipFor(int row, Point point) => null;
+
+    /// <summary>
+    /// Update the tooltip as the pointer moves. Recomputed only when the
+    /// pointer changes row or moves a noticeable distance sideways, since the
+    /// text can be expensive to build and a move event arrives per frame.
+    /// </summary>
+    protected void UpdateTooltip(Point point)
+    {
+        if (point.Y < HeaderHeight)
+        {
+            ClearTooltip();
+            return;
+        }
+
+        var row = RowIndexAt(point);
+        if (row < 0)
+        {
+            ClearTooltip();
+            return;
+        }
+
+        if (row == _tooltipRow && Math.Abs(point.X - _tooltipX) < 8)
+        {
+            return;
+        }
+
+        _tooltipRow = row;
+        _tooltipX = point.X;
+
+        var text = TooltipFor(row, point);
+        ToolTip.SetTip(this, text);
+        ToolTip.SetIsOpen(this, false);
+    }
+
+    private void ClearTooltip()
+    {
+        if (_tooltipRow < 0)
+        {
+            return;
+        }
+
+        _tooltipRow = -1;
+        _tooltipX = double.NaN;
+        ToolTip.SetTip(this, null);
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        ClearTooltip();
+    }
+
+    /// <summary>
+    /// Whether text would be trimmed inside a column of this width — the test
+    /// for "worth a tooltip", since a fully visible cell needs no repeating.
+    /// </summary>
+    protected bool IsTruncated(string text, double width) =>
+        text.Length > 0 && TextCache.MeasureUnconstrained(text) > width - (CellPadding * 2);
+
     // --- Type-to-select ----------------------------------------------------
 
     private string _typeBuffer = "";

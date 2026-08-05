@@ -275,6 +275,18 @@ public sealed class LowerPaneView : UserControl
         switch (_mode)
         {
             case LowerPaneMode.Modules:
+                _modules.TooltipOf = m =>
+                    string.Join(
+                        "\n",
+                        new[]
+                        {
+                            m.Name,
+                            m.Path,
+                            m.Description is { Length: > 0 } d ? d : null,
+                            m.Company is { Length: > 0 } c ? c : null,
+                        }.Where(l => !string.IsNullOrEmpty(l))
+                    );
+
                 _modules.EmptyMessage = message;
                 _modules.SetRows([]);
                 break;
@@ -292,6 +304,18 @@ public sealed class LowerPaneView : UserControl
     /// <summary>Restore the ordinary empty text after a successful load.</summary>
     private void ResetEmptyMessages()
     {
+        _modules.TooltipOf = m =>
+            string.Join(
+                "\n",
+                new[]
+                {
+                    m.Name,
+                    m.Path,
+                    m.Description is { Length: > 0 } d ? d : null,
+                    m.Company is { Length: > 0 } c ? c : null,
+                }.Where(l => !string.IsNullOrEmpty(l))
+            );
+
         _modules.EmptyMessage = "No mapped files.";
         _handles.EmptyMessage = "No open descriptors.";
         _threads.EmptyMessage = "No threads.";
@@ -358,6 +382,18 @@ public sealed class LowerPaneView : UserControl
 
     private void ConfigureModules()
     {
+        _modules.TooltipOf = m =>
+            string.Join(
+                "\n",
+                new[]
+                {
+                    m.Name,
+                    m.Path,
+                    m.Description is { Length: > 0 } d ? d : null,
+                    m.Company is { Length: > 0 } c ? c : null,
+                }.Where(l => !string.IsNullOrEmpty(l))
+            );
+
         _modules.EmptyMessage = "No mapped files.";
         _modules.IdentityOf = m => ((ModuleInfo)m).Path;
         _modules.RowColour = m =>
@@ -402,6 +438,19 @@ public sealed class LowerPaneView : UserControl
         _handles.IdentityOf = h => ((FileDescriptorInfo)h).Fd;
         // The first column is the fd number; typing should find names.
         _handles.SearchTextOf = h => h.Name;
+
+        // The name is usually a path, and paths are what a narrow column
+        // truncates first — so the tooltip carries the whole descriptor.
+        _handles.TooltipOf = h =>
+            string.Join(
+                "\n",
+                new[]
+                {
+                    $"fd {h.Fd}: {h.Kind}",
+                    h.Name,
+                    h.Access is { Length: > 0 } a ? $"access: {a}" : null,
+                }.Where(l => !string.IsNullOrEmpty(l))
+            );
         _handles.RowColour = h =>
             _handleChanges.Colour(((FileDescriptorInfo)h).Fd, ColorRules, IsDarkMode);
 

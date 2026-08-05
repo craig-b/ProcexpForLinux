@@ -66,6 +66,60 @@ public sealed class ProcessTreeView : VirtualTableBase
         row >= 0 && row < _rows.Count ? _rows[row].Process.Name : null;
 
     /// <summary>
+    /// The name column explains the process — path and command line, which are
+    /// the two things never fully visible in it. Metric columns only speak up
+    /// when their value is actually trimmed.
+    /// </summary>
+    protected override string? TooltipFor(int row, Point point)
+    {
+        if (row < 0 || row >= _rows.Count)
+        {
+            return null;
+        }
+
+        var process = _rows[row].Process;
+
+        if (point.X < NamePaneWidth)
+        {
+            var lines = new List<string> { $"{process.Name} (pid {process.Id.Pid})" };
+
+            if (process.ExecutablePath is { Length: > 0 } path)
+            {
+                lines.Add(path);
+            }
+
+            if (process.CommandLine is { Length: > 0 } commandLine && commandLine != process.Name)
+            {
+                lines.Add(commandLine);
+            }
+
+            if (process.UserName is { Length: > 0 } user)
+            {
+                lines.Add($"user: {user}");
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        var x = point.X - NamePaneWidth + HorizontalOffset;
+        double accumulated = 0;
+
+        for (var c = 1; c < _columns.Count; c++)
+        {
+            var (column, width) = _columns[c];
+            accumulated += width;
+
+            if (x < accumulated)
+            {
+                var text = Columns.Format(column, process);
+                return IsTruncated(text, width) ? text : null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Select and reveal the row for a process, if it is still on screen.
     /// Matched by full identity — pid and start time — so a pid recycled since
     /// the caller captured it selects nothing rather than the wrong process.
@@ -537,6 +591,10 @@ public sealed class ProcessTreeView : VirtualTableBase
             point.Y < HeaderHeight && EdgeAt(point) >= 0
                 ? new Cursor(StandardCursorType.SizeWestEast)
                 : Cursor.Default;
+
+        // Tooltips only when no gesture owns the pointer; one during a drag
+        // would follow the pointer around explaining the wrong row.
+        UpdateTooltip(point);
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)

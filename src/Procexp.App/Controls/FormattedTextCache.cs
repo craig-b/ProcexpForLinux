@@ -39,6 +39,25 @@ public sealed class FormattedTextCache(Typeface typeface, double fontSize)
     private readonly Dictionary<Key, Entry> _entries = [];
     private long _frame;
 
+    /// <summary>
+    /// Width of text laid out without constraint, uncached.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately outside the cache: this answers "would this be trimmed?"
+    /// for the pointer, at most a few times a second, and caching one entry
+    /// per distinct string at an unbounded width would fill the cache with
+    /// entries no paint ever reuses.
+    /// </remarks>
+    public double MeasureUnconstrained(string text) =>
+        new FormattedText(
+            text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSize,
+            Brushes.Black
+        ).Width;
+
     /// <summary>Advance the frame counter; call once per paint.</summary>
     public void BeginFrame()
     {

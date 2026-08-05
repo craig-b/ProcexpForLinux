@@ -55,14 +55,29 @@ public partial class MainWindow : Window
     private readonly HistoryGraphView _cpuSpark = MakeSpark("CPU");
     private readonly HistoryGraphView _memorySpark = MakeSpark("Memory");
     private readonly HistoryGraphView _ioSpark = MakeSpark("I/O");
+    private readonly TextBlock _cpuValue = MakeSparkValue(30);
+    private readonly TextBlock _memoryValue = MakeSparkValue(30);
+    private readonly TextBlock _ioValue = MakeSparkValue(56);
 
     private static HistoryGraphView MakeSpark(string title) =>
         new()
         {
             Title = title,
-            Width = 74,
+            Width = 90,
             Height = 28,
             Capacity = 60,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+
+    /// <summary>
+    /// The live value shown beside each sparkline. Min-width keeps the toolbar
+    /// from breathing as digits come and go.
+    /// </summary>
+    private static TextBlock MakeSparkValue(double minWidth) =>
+        new()
+        {
+            FontSize = 11,
+            MinWidth = minWidth,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
 
@@ -386,17 +401,25 @@ public partial class MainWindow : Window
         var dark = _tree.IsDarkMode;
 
         foreach (
-            var (spark, colour, tab, format) in new (
+            var (spark, value, colour, tab, format) in new (
                 HistoryGraphView,
+                TextBlock,
                 Color,
                 string,
                 Func<double, string>
             )[]
             {
-                (_cpuSpark, Color.FromRgb(90, 200, 90), "CPU", v => $"{v:F0}% CPU"),
-                (_memorySpark, Color.FromRgb(200, 150, 60), "Memory", v => $"{v:F0}% memory"),
+                (_cpuSpark, _cpuValue, Color.FromRgb(90, 200, 90), "CPU", v => $"{v:F0}% CPU"),
+                (
+                    _memorySpark,
+                    _memoryValue,
+                    Color.FromRgb(200, 150, 60),
+                    "Memory",
+                    v => $"{v:F0}% memory"
+                ),
                 (
                     _ioSpark,
+                    _ioValue,
                     Color.FromRgb(200, 90, 200),
                     "I/O",
                     v => $"{ValueFormat.Bytes((ulong)Math.Max(0, v))}/s"
@@ -409,18 +432,29 @@ public partial class MainWindow : Window
             spark.FormatValue = format;
             spark.SecondsPerSample = _sweep.IntervalSeconds;
 
-            // The graph is 74 pixels wide; a title drawn over it would leave
-            // room for nothing else, so the name lives in the tooltip.
-            ToolTip.SetTip(spark, $"{spark.Title} — click for System Information");
+            // The graph is too small to share pixels with text: the live value
+            // sits beside it, the name lives in the tooltip, and hovering the
+            // graph gives exact historical readings.
+            spark.ShowInlineLabels = false;
             spark.Title = "";
 
-            spark.PointerPressed += (_, _) =>
+            var group = new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Spacing = 4,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            };
+            group.Children.Add(spark);
+            group.Children.Add(value);
+
+            ToolTip.SetTip(group, $"{tab} — click for System Information");
+            group.PointerPressed += (_, _) =>
             {
                 ShowSystemInfo();
                 _systemInfo?.SelectTab(tab);
             };
 
-            host.Children.Add(spark);
+            host.Children.Add(group);
         }
     }
 
@@ -574,11 +608,19 @@ public partial class MainWindow : Window
         _systemInfo?.SetProcessCounts(snapshot.Processes.Count, snapshot.System.ThreadCount);
 
         var system = snapshot.System;
+        var memoryPercent =
+            system.MemoryTotal > 0 ? system.MemoryUsed * 100.0 / system.MemoryTotal : 0;
+
         _cpuSpark.Append(system.CpuTotalPercent);
-        _memorySpark.Append(
-            system.MemoryTotal > 0 ? system.MemoryUsed * 100.0 / system.MemoryTotal : 0
-        );
+        _memorySpark.Append(memoryPercent);
         _ioSpark.Append(system.DiskBytesPerSec);
+
+        _cpuValue.Text = $"{system.CpuTotalPercent:F0}%";
+        _memoryValue.Text = $"{memoryPercent:F0}%";
+
+        // Bytes(0) formats as "", which would leave a dangling "/s".
+        var ioRate = (ulong)Math.Max(0, system.DiskBytesPerSec);
+        _ioValue.Text = ioRate > 0 ? $"{ValueFormat.Bytes(ioRate)}/s" : "0 B/s";
 
         // Who was busiest this second, for the System Information graphs'
         // hover readout. Computed only while that window is open.
@@ -623,7 +665,10 @@ public partial class MainWindow : Window
     private void SetPaused(bool paused)
     {
         _sweep.Paused = paused;
-        Get<Button>("PauseButton").Content = paused ? "Resume" : "Pause";
+        Get<TextBlock>("PauseLabel").Text = paused ? "Resume" : "Pause";
+        Get<PathIcon>("PauseIcon").Data = Geometry.Parse(
+            paused ? "M8,5.14V19.14L19,12.14L8,5.14Z" : "M14,19H18V5H14M6,19H10V5H6V19Z"
+        );
         Get<MenuItem>("MenuPause").IsChecked = paused;
         UpdateStatus();
     }

@@ -83,6 +83,14 @@ public sealed class HistoryGraphView : Control
 
     public string Title { get; set; } = "";
 
+    /// <summary>
+    /// Whether the scale and current-value labels are drawn inside the graph.
+    /// The toolbar sparklines are too small to share pixels with text, so they
+    /// turn this off and show the value beside the graph instead; hovering
+    /// still gives exact readings.
+    /// </summary>
+    public bool ShowInlineLabels { get; set; } = true;
+
     public IReadOnlyList<GraphSeries> Series => _series;
 
     public GraphSeries AddSeries(Color colour, bool filled = true)
@@ -138,7 +146,11 @@ public sealed class HistoryGraphView : Control
         }
 
         context.DrawRectangle(null, BorderPen, bounds);
-        DrawLabels(context, bounds, maximum);
+        if (ShowInlineLabels)
+        {
+            DrawLabels(context, bounds, maximum);
+        }
+
         DrawHover(context, bounds, maximum);
     }
 

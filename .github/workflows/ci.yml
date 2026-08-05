@@ -3,6 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+    # Tags run the full pipeline too, so a release commit is built, tested and
+    # smoke-checked by CI while release.yml packages it.
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 

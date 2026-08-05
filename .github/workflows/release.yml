@@ -1,0 +1,98 @@
+name: Release
+
+# A tag is the release trigger; ci.yml also runs on tags, so the same commit is
+# built, tested and smoke-checked by the ordinary pipeline alongside this one.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  tarballs:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            libc: glibc
+            rid: linux-x64
+          - runner: ubuntu-24.04-arm
+            libc: glibc
+            rid: linux-arm64
+          - runner: ubuntu-latest
+            libc: musl
+            rid: linux-musl-x64
+          - runner: ubuntu-24.04-arm
+            libc: musl
+            rid: linux-musl-arm64
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # stage-tarball.sh derives the version from git describe
+
+      # The musl legs need none of this: they build inside an Alpine container,
+      # which brings its own SDK and toolchain.
+      - uses: actions/setup-dotnet@v4
+        if: matrix.libc == 'glibc'
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install the AOT toolchain
+        if: matrix.libc == 'glibc'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Native AOT cannot cross-compile without a target toolchain, so each
+      # architecture builds on a runner of that architecture — see DISTROS.md.
+      - name: Build (glibc)
+        if: matrix.libc == 'glibc'
+        run: RID=${{ matrix.rid }} ./Scripts/build-release.sh
+
+      - name: Build (musl)
+        if: matrix.libc == 'musl'
+        run: RID=${{ matrix.rid }} ./Scripts/build-musl.sh
+
+      # A native binary can link cleanly and still fail on first run, so prove
+      # the published artifact works before it is allowed near a release.
+      - name: Verify (glibc)
+        if: matrix.libc == 'glibc'
+        run: ./artifacts/procexp-smoke/procexp-smoke
+
+      - name: Verify (musl)
+        if: matrix.libc == 'musl'
+        run: docker run --rm -v "$PWD/artifacts/musl/procexp-smoke/procexp-smoke:/s:ro" alpine:3 /s
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{ matrix.rid }}
+          path: artifacts/procexp-*-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: tarballs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # Checksums travel with the tarballs so an install can be verified
+      # offline; the release page is the single place both come from.
+      - name: Generate checksums
+        run: cd dist && sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*

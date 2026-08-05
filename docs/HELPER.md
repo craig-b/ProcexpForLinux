@@ -82,6 +82,9 @@ If that is more than you want, do not install the helper. The app is fully funct
 
 ## Install
 
+`sudo ./Scripts/install.sh --enable-helper` performs all of the below; what follows is the manual
+equivalent.
+
 ```sh
 sudo groupadd -f procexp
 sudo usermod -aG procexp "$USER" # log out and back in for this to take effect

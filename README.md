@@ -67,6 +67,7 @@ Release binaries — Native AOT, no runtime dependency:
 
 ```sh
 ./Scripts/build-release.sh
+sudo ./Scripts/install.sh # optional; offers to activate the helper, never silently
 ```
 
 |                  | Size   | Startup |

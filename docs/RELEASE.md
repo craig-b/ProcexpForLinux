@@ -89,6 +89,24 @@ just the .NET runtime pack — unlike an IL bundle, which is architecture-neutra
 Building arm64 on an x64 host means either installing a cross-linker and sysroot, or building on
 arm64 hardware. CI does the latter.
 
+## Install
+
+```sh
+sudo ./Scripts/install.sh                # from a local build's artifacts/stage
+sudo ./Scripts/install.sh --tarball FILE # from a release tarball
+sudo ./Scripts/install.sh --uninstall
+```
+
+A script rather than a package because the binaries are self-contained: there is no runtime to
+resolve and no dependency graph to walk, so installation is copying the staged tree into place. On
+Arch, prefer `packaging/PKGBUILD` — a distribution package tracks files and conflicts in ways a
+script cannot.
+
+The script records what it installed in `/usr/share/procexp/manifest`, so `--uninstall` removes
+exactly that. It will offer to activate the helper — interactively, or with `--enable-helper` /
+`--without-helper` / `--add-user NAME` when scripted — but never activates it silently, for the
+reasons below.
+
 ## What ships where
 
 | Path                                                 | Contents                                      |

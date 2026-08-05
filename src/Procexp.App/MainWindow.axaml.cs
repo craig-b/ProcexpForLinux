@@ -521,8 +521,6 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
         {
-            BuildSparklines();
-
             var filterBox = Get<TextBox>("FilterBox");
             filterBox.Focus();
             filterBox.SelectAll();

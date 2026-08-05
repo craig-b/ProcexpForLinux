@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Procexp.App.Controls;
@@ -45,6 +46,25 @@ public partial class MainWindow : Window
 
     private readonly SystemStatsProvider _systemStats = new();
     private readonly GpuProvider _gpu = new();
+
+    /// <summary>
+    /// Toolbar sparklines, fed from the sweep's system stats. Small enough to
+    /// be a glance rather than a reading, which is what the click-through to
+    /// System Information is for.
+    /// </summary>
+    private readonly HistoryGraphView _cpuSpark = MakeSpark("CPU");
+    private readonly HistoryGraphView _memorySpark = MakeSpark("Memory");
+    private readonly HistoryGraphView _ioSpark = MakeSpark("I/O");
+
+    private static HistoryGraphView MakeSpark(string title) =>
+        new()
+        {
+            Title = title,
+            Width = 74,
+            Height = 28,
+            Capacity = 60,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
 
     /// <summary>
     /// Fills the columns the sweep is too fast to gather: description, company,
@@ -385,6 +405,8 @@ public partial class MainWindow : Window
             ScheduleSave();
         };
 
+        BuildSparklines();
+
         var filterBox = Get<TextBox>("FilterBox");
         filterBox.TextChanged += (_, _) =>
         {
@@ -400,6 +422,54 @@ public partial class MainWindow : Window
                 e.Handled = true;
             }
         };
+    }
+
+    /// <summary>
+    /// Put the sparklines in the toolbar and make each one a way in to the
+    /// System Information tab that explains it.
+    /// </summary>
+    private void BuildSparklines()
+    {
+        var host = Get<StackPanel>("Sparklines");
+        var dark = _tree.IsDarkMode;
+
+        foreach (
+            var (spark, colour, tab, format) in new (
+                HistoryGraphView,
+                Color,
+                string,
+                Func<double, string>
+            )[]
+            {
+                (_cpuSpark, Color.FromRgb(90, 200, 90), "CPU", v => $"{v:F0}% CPU"),
+                (_memorySpark, Color.FromRgb(200, 150, 60), "Memory", v => $"{v:F0}% memory"),
+                (
+                    _ioSpark,
+                    Color.FromRgb(200, 90, 200),
+                    "I/O",
+                    v => $"{ValueFormat.Bytes((ulong)Math.Max(0, v))}/s"
+                ),
+            }
+        )
+        {
+            spark.IsDarkMode = dark;
+            spark.AddSeries(colour);
+            spark.FormatValue = format;
+            spark.SecondsPerSample = _intervalSeconds;
+
+            // The graph is 74 pixels wide; a title drawn over it would leave
+            // room for nothing else, so the name lives in the tooltip.
+            ToolTip.SetTip(spark, $"{spark.Title} — click for System Information");
+            spark.Title = "";
+
+            spark.PointerPressed += (_, _) =>
+            {
+                ShowSystemInfo();
+                _systemInfo?.SelectTab(tab);
+            };
+
+            host.Children.Add(spark);
+        }
     }
 
     private void WireMenus()
@@ -496,6 +566,8 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
         {
+            BuildSparklines();
+
             var filterBox = Get<TextBox>("FilterBox");
             filterBox.Focus();
             filterBox.SelectAll();
@@ -581,6 +653,34 @@ public partial class MainWindow : Window
             }
 
             _systemInfo?.SetProcessCounts(snapshot.Processes.Count, snapshot.System.ThreadCount);
+
+            var system = snapshot.System;
+            _cpuSpark.Append(system.CpuTotalPercent);
+            _memorySpark.Append(
+                system.MemoryTotal > 0 ? system.MemoryUsed * 100.0 / system.MemoryTotal : 0
+            );
+            _ioSpark.Append(system.DiskBytesPerSec);
+
+            // Who was busiest this second, for the System Information graphs'
+            // hover readout. Computed only while that window is open.
+            if (_systemInfo is { } info)
+            {
+                var byCpu = snapshot
+                    .Processes.Values.OrderByDescending(p => p.CpuPercent)
+                    .FirstOrDefault();
+                var byMemory = snapshot
+                    .Processes.Values.OrderByDescending(p => p.ResidentSize)
+                    .FirstOrDefault();
+
+                info.RecordTopConsumers(
+                    byCpu is { CpuPercent: > 0.5 }
+                        ? $"{byCpu.Name} — {byCpu.CpuPercent:F0}%"
+                        : null,
+                    byMemory is not null
+                        ? $"{byMemory.Name} — {ValueFormat.Bytes(byMemory.ResidentSize)}"
+                        : null
+                );
+            }
         });
     }
 

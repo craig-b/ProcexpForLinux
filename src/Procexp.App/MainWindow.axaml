@@ -208,6 +208,14 @@
                     MinWidth="170"
                     VerticalAlignment="Center"
                 />
+                <!-- Live sparklines, as in Process Explorer's toolbar. Clicking
+                 one opens System Information at the matching tab. -->
+                <StackPanel
+                    Name="Sparklines"
+                    Orientation="Horizontal"
+                    Spacing="6"
+                    VerticalAlignment="Center"
+                />
             </StackPanel>
         </Border>
 

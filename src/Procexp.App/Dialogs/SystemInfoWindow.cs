@@ -34,6 +34,24 @@ public sealed class SystemInfoWindow : Window
     private readonly HistoryGraphView _summaryIo;
     private readonly HistoryGraphView _summaryNetwork;
 
+    private TabControl _tabs = null!;
+
+    /// <summary>
+    /// Bring a named tab forward — what the toolbar sparklines click through
+    /// to, so a glance at a spike leads straight to the detail behind it.
+    /// </summary>
+    public void SelectTab(string header)
+    {
+        foreach (var item in _tabs.Items.OfType<TabItem>())
+        {
+            if (Equals(item.Header, header))
+            {
+                _tabs.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
     private readonly HistoryGraphView _cpuDetail;
     private readonly List<HistoryGraphView> _coreGraphs = [];
 
@@ -70,6 +88,13 @@ public sealed class SystemInfoWindow : Window
 
         _cpuDetail = Graph("CPU Usage", percent: true);
         _memoryDetail = Graph("Physical Memory", percent: true);
+
+        // The CPU and memory graphs can say who was responsible; disk, network
+        // and GPU have no per-process attribution to offer.
+        _summaryCpu.DescribeSample = i => FromEnd(_topCpu, i);
+        _cpuDetail.DescribeSample = i => FromEnd(_topCpu, i);
+        _summaryMemory.DescribeSample = i => FromEnd(_topMemory, i);
+        _memoryDetail.DescribeSample = i => FromEnd(_topMemory, i);
         _swapDetail = Graph("Swap", percent: true);
         _diskDetail = Graph("Disk Throughput", percent: false);
         _networkDetail = Graph("Network Throughput", percent: false);
@@ -87,6 +112,38 @@ public sealed class SystemInfoWindow : Window
     {
         _processCount = processes;
         _threadCount = threads;
+    }
+
+    /// <summary>
+    /// Remember who was busiest at this instant, so hovering a sample can say
+    /// what caused the spike — the readout the macOS graphs have.
+    /// </summary>
+    public void RecordTopConsumers(string? cpu, string? memory)
+    {
+        Push(_topCpu, cpu);
+        Push(_topMemory, memory);
+
+        static void Push(List<string?> history, string? entry)
+        {
+            history.Add(entry);
+
+            // One more than any graph's capacity: the oldest visible sample
+            // must still have its label.
+            while (history.Count > 200)
+            {
+                history.RemoveAt(0);
+            }
+        }
+    }
+
+    private readonly List<string?> _topCpu = [];
+    private readonly List<string?> _topMemory = [];
+
+    /// <summary>The label for a sample counted back from the newest.</summary>
+    private static string? FromEnd(List<string?> history, int fromRight)
+    {
+        var index = history.Count - 1 - fromRight;
+        return index >= 0 && index < history.Count ? history[index] : null;
     }
 
     private HistoryGraphView Graph(string title, bool percent)
@@ -134,7 +191,7 @@ public sealed class SystemInfoWindow : Window
         _networkDetail.AddSeries(Color.FromRgb(90, 160, 220));
         _gpuDetail.AddSeries(Color.FromRgb(140, 200, 220));
 
-        var tabs = new TabControl
+        _tabs = new TabControl
         {
             FontSize = 13,
             Items =
@@ -166,7 +223,7 @@ public sealed class SystemInfoWindow : Window
         var root = new DockPanel();
         DockPanel.SetDock(close, Dock.Bottom);
         root.Children.Add(close);
-        root.Children.Add(tabs);
+        root.Children.Add(_tabs);
 
         Content = root;
     }

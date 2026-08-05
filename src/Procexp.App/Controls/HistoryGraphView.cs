@@ -30,7 +30,36 @@ public sealed class HistoryGraphView : Control
 
     private readonly List<GraphSeries> _series = [];
 
-    public HistoryGraphView() => ClipToBounds = true;
+    public HistoryGraphView()
+    {
+        ClipToBounds = true;
+
+        // Hovering reads a sample out of the history rather than only the
+        // newest one, which is what makes a spike two seconds ago legible.
+        PointerMoved += (_, e) =>
+        {
+            _hoverX = e.GetPosition(this).X;
+            InvalidateVisual();
+        };
+
+        PointerExited += (_, _) =>
+        {
+            _hoverX = null;
+            InvalidateVisual();
+        };
+    }
+
+    private double? _hoverX;
+
+    /// <summary>
+    /// Extra text for the hovered sample — on the system graphs, what was
+    /// using the resource at that moment. Given the sample's index from the
+    /// right, where zero is the newest.
+    /// </summary>
+    public Func<int, string?>? DescribeSample { get; set; }
+
+    /// <summary>Seconds per sample, so a hover can say how long ago it was.</summary>
+    public double SecondsPerSample { get; set; } = 1;
 
     public bool IsDarkMode { get; set; }
 
@@ -110,6 +139,74 @@ public sealed class HistoryGraphView : Control
 
         context.DrawRectangle(null, BorderPen, bounds);
         DrawLabels(context, bounds, maximum);
+        DrawHover(context, bounds, maximum);
+    }
+
+    /// <summary>
+    /// The hovered sample: a marker line, the value, how long ago it was, and
+    /// whatever the owner can say about that moment.
+    /// </summary>
+    private void DrawHover(DrawingContext context, Rect bounds, double maximum)
+    {
+        if (
+            _hoverX is not { } hoverX
+            || _series.Count == 0
+            || _series[0].Values.Count < 2
+            || bounds.Width <= 2
+        )
+        {
+            return;
+        }
+
+        var values = _series[0].Values;
+        var step = bounds.Width / (Capacity - 1);
+        var firstX = bounds.Width - ((values.Count - 1) * step);
+
+        var index = (int)Math.Round((hoverX - firstX) / step);
+        if (index < 0 || index >= values.Count)
+        {
+            return;
+        }
+
+        var x = firstX + (index * step);
+        context.DrawLine(HoverPen, new Point(x, 0), new Point(x, bounds.Height));
+
+        var fromRight = values.Count - 1 - index;
+        var age = fromRight * SecondsPerSample;
+
+        var lines = new List<string>
+        {
+            string.Join(
+                "   ",
+                _series.Select(s => FormatValue(index < s.Values.Count ? s.Values[index] : 0))
+            ),
+            age < 1 ? "now" : $"{age:F0}s ago",
+        };
+
+        if (DescribeSample?.Invoke(fromRight) is { Length: > 0 } detail)
+        {
+            lines.Add(detail);
+        }
+
+        var text = new FormattedText(
+            string.Join("\n", lines),
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(FontFamily.Default),
+            11,
+            LabelBrush
+        );
+
+        // Flipped to the other side near the right edge, so the readout is
+        // never clipped by the graph it belongs to.
+        var boxX = x + 8 + text.Width > bounds.Width ? x - 8 - text.Width : x + 8;
+        var boxY = Math.Min(8, bounds.Height - text.Height - 4);
+
+        context.FillRectangle(
+            HoverBackground,
+            new Rect(boxX - 4, boxY - 2, text.Width + 8, text.Height + 4)
+        );
+        context.DrawText(text, new Point(boxX, boxY));
     }
 
     private double ResolveMaximum()
@@ -255,6 +352,11 @@ public sealed class HistoryGraphView : Control
     private IPen BorderPen => new Pen(new SolidColorBrush(Color.FromRgb(80, 80, 80)), 1);
 
     private static IBrush LabelBrush => new SolidColorBrush(Color.FromRgb(220, 220, 220));
+
+    private static IPen HoverPen => new Pen(new SolidColorBrush(Color.FromRgb(200, 200, 200)), 1);
+
+    // Opaque enough to keep the readout legible over a filled series.
+    private static IBrush HoverBackground => new SolidColorBrush(Color.FromArgb(210, 20, 20, 20));
 
     private static IBrush ScaleBrush => new SolidColorBrush(Color.FromRgb(150, 150, 150));
 }

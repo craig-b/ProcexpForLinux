@@ -342,6 +342,86 @@ public abstract class VirtualTableBase : Control
         e.Handled = true;
     }
 
+    // --- Type-to-select ----------------------------------------------------
+
+    private string _typeBuffer = "";
+    private DateTime _typeBufferAt;
+    private static readonly TimeSpan TypeSelectTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The text a row is known by for type-to-select — the process name, the
+    /// module name, the variable. Null (the default) leaves typing unhandled.
+    /// </summary>
+    protected virtual string? RowSearchText(int row) => null;
+
+    protected override void OnTextInput(TextInputEventArgs e)
+    {
+        base.OnTextInput(e);
+
+        // Space stays free: it is the pause key in the main window, and no
+        // process is ever known by a name starting with a space.
+        if (e.Handled || RowCount == 0 || string.IsNullOrWhiteSpace(e.Text))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (now - _typeBufferAt > TypeSelectTimeout)
+        {
+            _typeBuffer = "";
+        }
+
+        _typeBufferAt = now;
+        _typeBuffer += e.Text;
+
+        e.Handled = SelectByTyping(_typeBuffer);
+    }
+
+    private bool SelectByTyping(string buffer)
+    {
+        // Repeating one letter cycles through that letter's matches, starting
+        // after the selection; anything else is a growing prefix from the top.
+        var cycling = buffer.Length > 1 && buffer.All(c => c == buffer[0]);
+        var needle = cycling ? buffer[..1] : buffer;
+        var start = cycling ? SelectedIndex + 1 : 0;
+
+        int? containsMatch = null;
+        for (var i = 0; i < RowCount; i++)
+        {
+            var row = (start + i) % RowCount;
+            var text = RowSearchText(row);
+            if (text is null)
+            {
+                continue;
+            }
+
+            if (text.StartsWith(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                MoveSelectionTo(row);
+                return true;
+            }
+
+            // A substring hit is remembered but a prefix hit anywhere wins,
+            // so "fire" finds firefox before it settles for aupdatefirmware.
+            if (
+                containsMatch is null
+                && !cycling
+                && text.Contains(needle, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                containsMatch = row;
+            }
+        }
+
+        if (containsMatch is { } fallback)
+        {
+            MoveSelectionTo(fallback);
+            return true;
+        }
+
+        return false;
+    }
+
     protected void MoveSelection(int delta) =>
         MoveSelectionTo(Math.Clamp(_selectedIndex + delta, 0, RowCount - 1));
 

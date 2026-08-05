@@ -37,6 +37,9 @@ public sealed class ProcessTreeView : VirtualTableBase
 
     protected override int RowCount => _rows.Count;
 
+    protected override string? RowSearchText(int row) =>
+        row >= 0 && row < _rows.Count ? _rows[row].Process.Name : null;
+
     protected override double FrozenWidth => NamePaneWidth;
 
     protected override double ScrollableWidth => _columns.Skip(1).Sum(c => c.Width);

@@ -51,6 +51,25 @@ public sealed class DataTableView<T> : VirtualTableBase
     /// <summary>Message shown when there are no rows.</summary>
     public string EmptyMessage { get; set; } = "";
 
+    /// <summary>
+    /// What type-to-select matches against. Defaults to the first column's
+    /// text, which is the natural name everywhere except tables whose first
+    /// column is a number — those set this to their name column.
+    /// </summary>
+    public Func<T, string?>? SearchTextOf { get; set; }
+
+    protected override string? RowSearchText(int row)
+    {
+        if (row < 0 || row >= _rows.Count)
+        {
+            return null;
+        }
+
+        return SearchTextOf is not null ? SearchTextOf(_rows[row])
+            : _columns.Count > 0 ? _columns[0].Format(_rows[row])
+            : null;
+    }
+
     public event EventHandler? SortChanged;
 
     protected override int RowCount => _rows.Count;

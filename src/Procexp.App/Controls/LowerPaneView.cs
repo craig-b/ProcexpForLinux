@@ -388,6 +388,8 @@ public sealed class LowerPaneView : UserControl
     {
         _handles.EmptyMessage = "No open descriptors, or they belong to another user.";
         _handles.IdentityOf = h => ((FileDescriptorInfo)h).Fd;
+        // The first column is the fd number; typing should find names.
+        _handles.SearchTextOf = h => h.Name;
         _handles.RowColour = h =>
             _handleChanges.Colour(((FileDescriptorInfo)h).Fd, ColorRules, IsDarkMode);
 
@@ -435,6 +437,8 @@ public sealed class LowerPaneView : UserControl
     {
         _threads.EmptyMessage = "No threads.";
         _threads.IdentityOf = t => ((ThreadInfo)t).Tid;
+        // The first column is the tid; typing should find thread names.
+        _threads.SearchTextOf = t => t.Name;
         _threads.RowColour = t =>
             _threadChanges.Colour(((ThreadInfo)t).Tid, ColorRules, IsDarkMode);
 

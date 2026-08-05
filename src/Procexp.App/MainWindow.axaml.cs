@@ -83,7 +83,7 @@ public partial class MainWindow : Window
 
     private readonly RollingAverage _layoutTimes = new();
 
-    private IReadOnlyList<(Column Column, double Width)> _columns = [];
+    private readonly ColumnCoordinator _columns = null!;
 
     public MainWindow()
     {
@@ -99,7 +99,15 @@ public partial class MainWindow : Window
 
         Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
 
-        ApplyColumns(_settings.Columns);
+        _columns = new ColumnCoordinator(
+            this,
+            _tree,
+            _settings.ColumnWidths,
+            Rebuild,
+            ScheduleSave,
+            SaveSettings
+        );
+        _columns.Apply(_settings.Columns);
 
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
@@ -152,33 +160,6 @@ public partial class MainWindow : Window
     private T Get<T>(string name)
         where T : Control => this.FindControl<T>(name)!;
 
-    /// <summary>
-    /// Rebuild the column layout, honouring any saved widths.
-    /// </summary>
-    /// <remarks>
-    /// Widths are keyed by column name rather than position, so adding or
-    /// reordering columns does not shuffle every stored width onto the wrong one.
-    /// </remarks>
-    private void ApplyColumns(IReadOnlyList<Column> columns)
-    {
-        var normalised = Columns_.Normalise(columns);
-
-        _columns =
-        [
-            (Column.Name, _tree.NamePaneWidth),
-            .. normalised
-                .Where(c => c != Column.Name)
-                .Select(c =>
-                    (
-                        c,
-                        _settings.ColumnWidths.TryGetValue(c.ToString(), out var w)
-                            ? w
-                            : Columns.DefaultWidth(c)
-                    )
-                ),
-        ];
-    }
-
     private void ApplySettings()
     {
         _tree.SortColumn = _settings.SortColumn;
@@ -187,7 +168,7 @@ public partial class MainWindow : Window
         _list.HighlightNewAndDead = _settings.HighlightNewAndDead;
         _sweep.IntervalSeconds = _settings.RefreshSeconds;
         _confirmActions = _settings.ConfirmActions;
-        _columnSets = _settings.ColumnSets;
+        _columns.SetColumnSets(_settings.ColumnSets);
         ApplyOptions(
             _settings.ConfirmActions,
             _settings.HighlightSeconds,
@@ -249,8 +230,11 @@ public partial class MainWindow : Window
         SettingsStore.Save(
             _settings with
             {
-                Columns = [.. _columns.Select(c => c.Column)],
-                ColumnWidths = _columns.ToDictionary(c => c.Column.ToString(), c => c.Width),
+                Columns = [.. _columns.Columns.Select(c => c.Column)],
+                ColumnWidths = _columns.Columns.ToDictionary(
+                    c => c.Column.ToString(),
+                    c => c.Width
+                ),
                 SortColumn = _tree.SortColumn,
                 SortDescending = _tree.SortDescending,
                 TreeMode = Get<ToggleSwitch>("TreeToggle").IsChecked == true,
@@ -261,7 +245,7 @@ public partial class MainWindow : Window
                 HighlightSeconds = _list.HighlightDuration.TotalSeconds,
                 ConfirmActions = _confirmActions,
                 ColorRules = ColorRuleSetting.FromRules(_colorRules),
-                ColumnSets = _columnSets,
+                ColumnSets = _columns.ColumnSets,
                 AlwaysOnTop = Topmost,
                 NamePaneWidth = _tree.NamePaneWidth,
                 WindowWidth = Width,
@@ -349,7 +333,7 @@ public partial class MainWindow : Window
         // the control's version back and persists it.
         _tree.ColumnsChanged += (_, columns) =>
         {
-            _columns = columns;
+            _columns.AcceptLayout(columns);
             Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
             SyncScrollBars();
             ScheduleSave();
@@ -524,11 +508,14 @@ public partial class MainWindow : Window
         Get<MenuItem>("MenuAbout").Click += (_, _) => ShowAbout();
         Get<MenuItem>("MenuProperties").Click += (_, _) => ShowProperties();
         Get<MenuItem>("MenuSystemInfo").Click += (_, _) => ShowSystemInfo();
-        Get<MenuItem>("MenuColumns").Click += (_, _) => _ = ChooseColumnsAsync();
+        Get<MenuItem>("MenuColumns").Click += (_, _) => _ = _columns.ChooseAsync();
         Get<MenuItem>("MenuSettings").Click += (_, _) => _ = ShowSettingsAsync();
-        Get<MenuItem>("MenuSaveColumnSet").Click += (_, _) => _ = SaveColumnSetAsync();
-        Get<MenuItem>("MenuOrganizeColumnSets").Click += (_, _) => _ = OrganizeColumnSetsAsync();
-        RebuildColumnSetsMenu();
+        Get<MenuItem>("MenuSaveColumnSet").Click += (_, _) => _ = _columns.SaveSetAsync();
+        Get<MenuItem>("MenuOrganizeColumnSets").Click += (_, _) => _ = _columns.OrganizeAsync();
+        _columns.WireMenu(
+            Get<MenuItem>("MenuColumnSets"),
+            Get<Separator>("MenuColumnSetsSeparator")
+        );
         Get<MenuItem>("MenuFind").Click += (_, _) => ShowFind();
 
         void WireSpeed(string name, double seconds) =>
@@ -688,7 +675,7 @@ public partial class MainWindow : Window
             filter: _filter
         );
 
-        _tree.SetRows(rows, _columns);
+        _tree.SetRows(rows, _columns.Columns);
         _layoutTimes.Record(watch.Elapsed.TotalMilliseconds);
 
         SyncScrollBars();
@@ -840,98 +827,6 @@ public partial class MainWindow : Window
         _systemInfo.Show(this);
     }
 
-    // ---- Column sets --------------------------------------------------------
-
-    private IReadOnlyList<ColumnSet> _columnSets = [];
-
-    /// <summary>
-    /// Rebuild the Column Sets menu: the two commands, then one item per saved
-    /// set. Rebuilt rather than bound, since the menu is the only view of them.
-    /// </summary>
-    private void RebuildColumnSetsMenu()
-    {
-        var menu = Get<MenuItem>("MenuColumnSets");
-        var fixedItems = menu.Items.OfType<Control>().Take(3).ToList();
-
-        menu.Items.Clear();
-        foreach (var item in fixedItems)
-        {
-            menu.Items.Add(item);
-        }
-
-        Get<Separator>("MenuColumnSetsSeparator").IsVisible = _columnSets.Count > 0;
-
-        foreach (var set in _columnSets)
-        {
-            var item = new MenuItem { Header = set.Name };
-            var columns = set.Columns;
-            item.Click += (_, _) =>
-            {
-                ApplyColumns(columns);
-                _tree.SetRows([], _columns);
-                Rebuild();
-                ScheduleSave();
-            };
-            menu.Items.Add(item);
-        }
-    }
-
-    private async Task SaveColumnSetAsync()
-    {
-        var prompt = new TextPromptDialog(
-            "Save Column Set",
-            "Name for this column layout:",
-            $"Set {_columnSets.Count + 1}"
-        );
-        await prompt.ShowDialog(this).ConfigureAwait(true);
-
-        if (prompt.Result is not { } name)
-        {
-            return;
-        }
-
-        // Saving over an existing name replaces it, which is what a user
-        // re-saving a tweaked layout means.
-        var columns = _columns.Select(c => c.Column).ToList();
-        _columnSets =
-        [
-            .. _columnSets.Where(s => s.Name != name),
-            new ColumnSet { Name = name, Columns = columns },
-        ];
-
-        RebuildColumnSetsMenu();
-        ScheduleSave();
-    }
-
-    private async Task OrganizeColumnSetsAsync()
-    {
-        var window = new ColumnSetsWindow(_columnSets);
-        await window.ShowDialog(this).ConfigureAwait(true);
-
-        if (window.Result is { } kept)
-        {
-            _columnSets = kept;
-            RebuildColumnSetsMenu();
-            ScheduleSave();
-        }
-    }
-
-    private async Task ChooseColumnsAsync()
-    {
-        var chooser = new ColumnChooserWindow([.. _columns.Select(c => c.Column)]);
-        await chooser.ShowDialog(this).ConfigureAwait(true);
-
-        if (chooser.Result is { } chosen)
-        {
-            ApplyColumns(chosen);
-            Rebuild();
-
-            // Persist immediately. A column layout is deliberate work, and losing
-            // it to a crash before the next clean exit would be irritating.
-            SaveSettings();
-        }
-    }
-
     private void ShowFind()
     {
         var find = new FindHandleWindow(_sampler, () => _list.Current, _tree.IsDarkMode);
@@ -990,13 +885,15 @@ public partial class MainWindow : Window
             await using var writer = new StreamWriter(stream);
 
             await writer
-                .WriteLineAsync(string.Join('\t', _columns.Select(c => Columns.Title(c.Column))))
+                .WriteLineAsync(
+                    string.Join('\t', _columns.Columns.Select(c => Columns.Title(c.Column)))
+                )
                 .ConfigureAwait(true);
 
             foreach (var row in rows)
             {
                 var indent = new string(' ', row.Depth * 2);
-                var cells = _columns.Select(
+                var cells = _columns.Columns.Select(
                     (c, i) =>
                         i == 0
                             ? indent + Columns.Format(c.Column, row.Process)

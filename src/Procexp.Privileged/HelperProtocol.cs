@@ -60,6 +60,15 @@ public enum HelperOperation
 
     /// <summary>Change scheduling priority.</summary>
     SetNice,
+
+    /// <summary>
+    /// Read <c>/proc/PID/task/TID/stack</c> — a thread's kernel stack.
+    /// </summary>
+    /// <remarks>
+    /// Helper-only by nature rather than by policy: the kernel gates this file
+    /// behind CAP_SYS_ADMIN, so not even the owning user can read it directly.
+    /// </remarks>
+    ReadThreadKernelStack,
 }
 
 /// <summary>One request. Serialised as a single line of JSON.</summary>
@@ -88,6 +97,10 @@ public sealed record HelperRequest
 
     [JsonPropertyName("nice")]
     public int Nice { get; init; }
+
+    /// <summary>Thread id, for the per-thread operations.</summary>
+    [JsonPropertyName("tid")]
+    public int Tid { get; init; }
 }
 
 /// <summary>One response.</summary>

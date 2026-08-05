@@ -230,6 +230,51 @@ public sealed class PrivilegedClient
             : null;
     }
 
+    /// <summary>
+    /// A thread's kernel stack, as the raw <c>/proc/PID/task/TID/stack</c> text.
+    /// </summary>
+    /// <remarks>
+    /// Throws rather than returning null on failure: unlike the fallback reads,
+    /// there is no unprivileged path to fall back to, so the caller needs the
+    /// reason to show, not just the absence of an answer.
+    /// </remarks>
+    public async Task<string> ReadThreadKernelStackAsync(
+        ProcessId id,
+        int tid,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var response = await SendAsync(
+                new HelperRequest
+                {
+                    Operation = HelperOperation.ReadThreadKernelStack,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                    Tid = tid,
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        if (!response.Ok)
+        {
+            throw new ProviderException(
+                ProviderErrorKind.Underlying,
+                response.Error switch
+                {
+                    // A helper predating this operation answers with its generic
+                    // rejection; translate that into the actual remedy.
+                    "unknown operation" => "the installed helper predates kernel stacks — "
+                        + "reinstall it and 'systemctl restart procexp-helper'",
+                    { } error => error,
+                    null => "helper refused the request",
+                }
+            );
+        }
+
+        return response.Content ?? "";
+    }
+
     public async Task SignalAsync(
         ProcessId id,
         int signal,

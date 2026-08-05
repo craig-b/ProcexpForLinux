@@ -143,6 +143,11 @@ public partial class MainWindow : Window
                 : null;
             window?.Show(this);
         };
+        _lowerPane.ShowThreadStack += (id, thread) =>
+        {
+            var name = _actions.Actionable() is { } p && p.Id == id ? p.Name : $"pid {id.Pid}";
+            new ThreadStackWindow(id, name, thread).Show(this);
+        };
         Get<ContentControl>("LowerPaneHost").Content = _lowerPane;
 
         ApplySettings();

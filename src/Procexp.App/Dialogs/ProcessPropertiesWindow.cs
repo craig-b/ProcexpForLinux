@@ -212,6 +212,14 @@ public sealed class ProcessPropertiesWindow : Window
             ),
         ]);
 
+        _threads.RowActivated += (_, _) =>
+        {
+            if (_threads.SelectedItem is { } thread)
+            {
+                new ThreadStackWindow(_id, _record.Name, thread).Show(this);
+            }
+        };
+
         _sockets.EmptyMessage = "No sockets open.";
         _sockets.IdentityOf = s => ((SocketInfo)s).Fd;
         _sockets.SetColumns([

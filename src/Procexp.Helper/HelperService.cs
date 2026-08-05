@@ -210,6 +210,7 @@ internal sealed partial class HelperService(Action<string> log)
             HelperOperation.ReadFileDescriptors => ReadFileDescriptors(request),
             HelperOperation.Signal => SendSignal(request, peer),
             HelperOperation.SetNice => SetNice(request, peer),
+            HelperOperation.ReadThreadKernelStack => ReadThreadKernelStack(request, peer),
             _ => HelperResponse.Failure("unknown operation"),
         };
     }
@@ -312,6 +313,43 @@ internal sealed partial class HelperService(Action<string> log)
         catch (ProviderException e)
         {
             return HelperResponse.Failure(e.Message);
+        }
+    }
+
+    /// <summary>
+    /// A thread's kernel stack.
+    /// </summary>
+    /// <remarks>
+    /// The path is built from two integers, so there is no way to name an
+    /// arbitrary file, and a tid that does not belong to the pid simply has no
+    /// entry under that process's <c>task</c> directory. Logged per call: reads
+    /// are click-driven from the stack window, and a kernel stack reveals what
+    /// another user's process is doing inside the kernel.
+    /// </remarks>
+    private HelperResponse ReadThreadKernelStack(HelperRequest request, PeerCredentials peer)
+    {
+        if (request.Tid <= 0)
+        {
+            return HelperResponse.Failure("a thread id is required");
+        }
+
+        log(
+            $"uid {peer.Uid} (pid {peer.Pid}) read the kernel stack of "
+                + $"pid {request.Pid} tid {request.Tid}"
+        );
+
+        var path = $"/proc/{request.Pid}/task/{request.Tid}/stack";
+        try
+        {
+            return HelperResponse.Success(File.ReadAllText(path));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return HelperResponse.Failure(
+                File.Exists($"/proc/{request.Pid}/task/{request.Tid}")
+                    ? $"could not read {path} — the kernel may lack CONFIG_STACKTRACE"
+                    : $"thread {request.Tid} has exited"
+            );
         }
     }
 

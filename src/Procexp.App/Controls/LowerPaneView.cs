@@ -118,10 +118,16 @@ public sealed class LowerPaneView : UserControl
             table.SelectionChanged += (_, _) => UpdateSummary();
         }
 
-        // Double-click opens the row in full. Threads have no detail window:
-        // every field they have is already a column.
+        // Double-click opens the row in full.
         _modules.RowActivated += (_, _) => ShowDetail?.Invoke(_modules.SelectedItem, null);
         _handles.RowActivated += (_, _) => ShowDetail?.Invoke(null, _handles.SelectedItem);
+        _threads.RowActivated += (_, _) =>
+        {
+            if (_process is { } id && _threads.SelectedItem is { } thread)
+            {
+                ShowThreadStack?.Invoke(id, thread);
+            }
+        };
 
         ApplyMode();
     }
@@ -145,6 +151,9 @@ public sealed class LowerPaneView : UserControl
     /// them and an ownerless window has no sensible placement.
     /// </summary>
     public event Action<ModuleInfo?, FileDescriptorInfo?>? ShowDetail;
+
+    /// <summary>Raised when a thread row is opened, for the kernel stack window.</summary>
+    public event Action<ProcessId, ThreadInfo>? ShowThreadStack;
 
     /// <summary>How long the new and removed row tints linger.</summary>
     public TimeSpan HighlightDuration

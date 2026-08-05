@@ -12,6 +12,7 @@ and the helper is optional. It exists for these:
 | `/proc/PID/environ`               | Same restriction. Supplies the Environment tab.                                                      |
 | `/proc/PID/maps`                  | Gated by `ptrace_may_access`. Supplies the lower pane's mapped-files view.                           |
 | `/proc/PID/fd`, `fdinfo`          | Same gate. Supplies the handles view.                                                                |
+| `/proc/PID/task/TID/stack`        | Requires `CAP_SYS_ADMIN` — not even the owning user can read it. Supplies the kernel stack window.   |
 | Signalling other users' processes | Kill, suspend, resume and renice across user boundaries.                                             |
 
 Without the helper, those fields are blank and cross-user actions fail — nothing else changes.

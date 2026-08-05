@@ -1,7 +1,12 @@
 # Sysinternals Process Explorer for Linux
 
 A Linux implementation of the core Process Explorer experience, written in C# on .NET 10 with an
-Avalonia UI front end.
+Avalonia UI front end. It is a sibling to [ProcexpForMac](../ProcexpForMac) and follows the same
+architecture: immutable snapshots produced by pluggable providers behind narrow interfaces, with the
+UI depending only on those interfaces.
+
+This is a **re-implementation, not a source port** — no Swift is shared. What carries over is the
+architecture, the data contracts, and the feature set.
 
 ## Install
 
@@ -13,12 +18,7 @@ Picks the release tarball matching the machine's architecture and libc, verifies
 installs. Works on x86_64 and aarch64, glibc (Arch, Debian, Ubuntu, Fedora, …) and musl (Alpine).
 The optional privileged helper is offered interactively and never enabled silently — see
 [docs/HELPER.md](docs/HELPER.md). Uninstall later with
-`sudo bash /usr/share/procexp/install.sh --uninstall`. It is a sibling to
-[ProcexpForMac](../ProcexpForMac) and follows the same architecture: immutable snapshots produced by
-pluggable providers behind narrow interfaces, with the UI depending only on those interfaces.
-
-This is a **re-implementation, not a source port** — no Swift is shared. What carries over is the
-architecture, the data contracts, and the feature set.
+`sudo bash /usr/share/procexp/install.sh --uninstall`.
 
 ## Status
 

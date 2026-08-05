@@ -35,7 +35,7 @@ public partial class MainWindow : Window
     private readonly HashSet<ProcessId> _collapsed = [];
     private readonly CancellationTokenSource _lifetime = new();
 
-    private readonly ActionCoordinator _actions = null!;
+    private readonly SelectionActions _actions = null!;
     private readonly ProcessTreeView _tree = null!;
     private readonly ScrollBar _verticalScroll = null!;
     private readonly ScrollBar _horizontalScroll = null!;
@@ -88,9 +88,15 @@ public partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
 
-        _actions = new ActionCoordinator(this, () => _confirmActions);
         _settings = new SettingsCoordinator(GatherSettings);
         _sweep = new SweepController(_sampler, ApplySnapshot, OnHighlightTick, _lifetime.Token);
+        _actions = new SelectionActions(
+            this,
+            () => _confirmActions,
+            _list,
+            () => _tree.SelectedProcess,
+            _sweep.RefreshNowAsync
+        );
         _tree = Get<ProcessTreeView>("Tree");
         _verticalScroll = Get<ScrollBar>("VerticalScroll");
         _horizontalScroll = Get<ScrollBar>("HorizontalScroll");
@@ -340,8 +346,8 @@ public partial class MainWindow : Window
     {
         Get<Button>("PauseButton").Click += (_, _) => TogglePause();
         Get<Button>("RefreshButton").Click += (_, _) => _ = _sweep.RefreshNowAsync();
-        Get<Button>("KillButton").Click += (_, _) => _ = KillSelectedAsync(tree: false);
-        Get<Button>("SuspendButton").Click += (_, _) => _ = SuspendSelectedAsync();
+        Get<Button>("KillButton").Click += (_, _) => _ = _actions.KillAsync(tree: false);
+        Get<Button>("SuspendButton").Click += (_, _) => _ = _actions.SuspendAsync();
 
         var treeToggle = Get<ToggleSwitch>("TreeToggle");
         treeToggle.IsCheckedChanged += (_, _) =>
@@ -457,11 +463,11 @@ public partial class MainWindow : Window
         WireSpeed("MenuSpeedSlow", 2.0);
         WireSpeed("MenuSpeedVerySlow", 5.0);
 
-        Get<MenuItem>("MenuKill").Click += (_, _) => _ = KillSelectedAsync(tree: false);
-        Get<MenuItem>("MenuKillTree").Click += (_, _) => _ = KillSelectedAsync(tree: true);
-        Get<MenuItem>("MenuSuspend").Click += (_, _) => _ = SuspendSelectedAsync();
-        Get<MenuItem>("MenuResume").Click += (_, _) => _ = ResumeSelectedAsync();
-        Get<MenuItem>("MenuRestart").Click += (_, _) => _ = RestartSelectedAsync();
+        Get<MenuItem>("MenuKill").Click += (_, _) => _ = _actions.KillAsync(tree: false);
+        Get<MenuItem>("MenuKillTree").Click += (_, _) => _ = _actions.KillAsync(tree: true);
+        Get<MenuItem>("MenuSuspend").Click += (_, _) => _ = _actions.SuspendAsync();
+        Get<MenuItem>("MenuResume").Click += (_, _) => _ = _actions.ResumeAsync();
+        Get<MenuItem>("MenuRestart").Click += (_, _) => _ = _actions.RestartAsync();
 
         WireNice("MenuNiceHighest", -20);
         WireNice("MenuNiceHigh", -5);
@@ -490,17 +496,17 @@ public partial class MainWindow : Window
             };
 
         void WireNice(string name, int nice) =>
-            Get<MenuItem>(name).Click += (_, _) => _ = SetNiceSelectedAsync(nice);
+            Get<MenuItem>(name).Click += (_, _) => _ = _actions.SetNiceAsync(nice);
     }
 
     private void WireContextMenu()
     {
         Get<MenuItem>("CtxProperties").Click += (_, _) => ShowProperties();
-        Get<MenuItem>("CtxKill").Click += (_, _) => _ = KillSelectedAsync(tree: false);
-        Get<MenuItem>("CtxKillTree").Click += (_, _) => _ = KillSelectedAsync(tree: true);
-        Get<MenuItem>("CtxSuspend").Click += (_, _) => _ = SuspendSelectedAsync();
-        Get<MenuItem>("CtxResume").Click += (_, _) => _ = ResumeSelectedAsync();
-        Get<MenuItem>("CtxRestart").Click += (_, _) => _ = RestartSelectedAsync();
+        Get<MenuItem>("CtxKill").Click += (_, _) => _ = _actions.KillAsync(tree: false);
+        Get<MenuItem>("CtxKillTree").Click += (_, _) => _ = _actions.KillAsync(tree: true);
+        Get<MenuItem>("CtxSuspend").Click += (_, _) => _ = _actions.SuspendAsync();
+        Get<MenuItem>("CtxResume").Click += (_, _) => _ = _actions.ResumeAsync();
+        Get<MenuItem>("CtxRestart").Click += (_, _) => _ = _actions.RestartAsync();
 
         Get<MenuItem>("CtxCopyPath").Click += (_, _) =>
             _ = CopyAsync(_tree.SelectedProcess?.ExecutablePath);
@@ -686,68 +692,6 @@ public partial class MainWindow : Window
     // ---- Actions ------------------------------------------------------------
 
     /// <summary>
-    /// The selected process, or null when the selection refers to a row that is
-    /// only still on screen because it is fading out.
-    /// </summary>
-    private ProcessRecord? ActionableSelection()
-    {
-        var selected = _tree.SelectedProcess;
-        if (selected is null)
-        {
-            return null;
-        }
-
-        // Acting on a ghost row would signal a process that has already exited,
-        // or worse, whatever has since inherited its pid.
-        return _list.IsDead(selected.Id) ? null : selected;
-    }
-
-    private async Task KillSelectedAsync(bool tree)
-    {
-        if (ActionableSelection() is { } process)
-        {
-            await _actions.KillAsync(process, tree, _list.Current).ConfigureAwait(true);
-            await _sweep.RefreshNowAsync().ConfigureAwait(true);
-        }
-    }
-
-    private async Task SuspendSelectedAsync()
-    {
-        if (ActionableSelection() is { } process)
-        {
-            await _actions.SuspendAsync(process).ConfigureAwait(true);
-            await _sweep.RefreshNowAsync().ConfigureAwait(true);
-        }
-    }
-
-    private async Task ResumeSelectedAsync()
-    {
-        if (ActionableSelection() is { } process)
-        {
-            await _actions.ResumeAsync(process).ConfigureAwait(true);
-            await _sweep.RefreshNowAsync().ConfigureAwait(true);
-        }
-    }
-
-    private async Task RestartSelectedAsync()
-    {
-        if (ActionableSelection() is { } process)
-        {
-            await _actions.RestartAsync(process, _list.Current).ConfigureAwait(true);
-            await _sweep.RefreshNowAsync().ConfigureAwait(true);
-        }
-    }
-
-    private async Task SetNiceSelectedAsync(int nice)
-    {
-        if (ActionableSelection() is { } process)
-        {
-            await _actions.SetNiceAsync(process, nice).ConfigureAwait(true);
-            await _sweep.RefreshNowAsync().ConfigureAwait(true);
-        }
-    }
-
-    /// <summary>
     /// Open the Properties window for the selection.
     /// </summary>
     /// <remarks>
@@ -757,7 +701,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void ShowProperties()
     {
-        if (ActionableSelection() is not { } process)
+        if (_actions.Actionable() is not { } process)
         {
             return;
         }

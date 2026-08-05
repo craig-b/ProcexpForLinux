@@ -1,9 +1,10 @@
 # Sysinternals Process Explorer for Linux
 
 A Linux implementation of the core Process Explorer experience, written in C# on .NET 10 with an
-Avalonia UI front end. It is a sibling to [ProcexpForMac](../ProcexpForMac) and follows the same
-architecture: immutable snapshots produced by pluggable providers behind narrow interfaces, with the
-UI depending only on those interfaces.
+Avalonia UI front end. It is a sibling to
+[ProcexpForMac](https://github.com/microsoft/ProcexpForMac) and follows the same architecture:
+immutable snapshots produced by pluggable providers behind narrow interfaces, with the UI depending
+only on those interfaces.
 
 This is a **re-implementation, not a source port** — no Swift is shared. What carries over is the
 architecture, the data contracts, and the feature set.

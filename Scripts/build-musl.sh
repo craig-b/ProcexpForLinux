@@ -19,6 +19,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/artifacts/musl"
 IMAGE="mcr.microsoft.com/dotnet/sdk:10.0-alpine"
 
+# linux-musl-x64 or linux-musl-arm64; the container must match, so on a
+# different architecture run this on hardware (or emulation) of that kind.
+RID="${RID:-linux-musl-x64}"
+
 command -v docker > /dev/null 2>&1 || {
   echo "docker is required to build musl binaries from a non-Alpine host." >&2
   echo "On Alpine itself, use Scripts/build-release.sh with RID=linux-musl-x64." >&2
@@ -31,6 +35,7 @@ mkdir -p "${OUT}"
 docker run --rm \
   -v "${ROOT}:/src:ro" \
   -v "${OUT}:/out" \
+  -e RID="${RID}" \
   "${IMAGE}" sh -c '
         set -e
         apk add --no-cache clang build-base zlib-dev >/dev/null
@@ -43,10 +48,10 @@ docker run --rm \
         for p in Procexp.App:procexp Procexp.Helper:procexp-helper Procexp.Smoke:procexp-smoke; do
             project="${p%%:*}"
             name="${p##*:}"
-            echo "==> ${name} (linux-musl-x64)"
+            echo "==> ${name} (${RID})"
             dotnet publish "src/${project}" \
                 --configuration Release \
-                --runtime linux-musl-x64 \
+                --runtime "${RID}" \
                 -p:PublishAot=true \
                 -p:StripSymbols=true \
                 -p:InvariantGlobalization=true \
@@ -55,8 +60,8 @@ docker run --rm \
         done
     '
 
-echo
-echo "musl binaries in ${OUT}"
-echo
+# Staging runs on the host — it only copies files, so it needs no musl anything.
+"${ROOT}/Scripts/stage-tarball.sh" "${OUT}" "${RID}"
+
 echo "Verify with:"
 echo "  docker run --rm -v ${OUT}/procexp-smoke/procexp-smoke:/s:ro alpine:3 /s"

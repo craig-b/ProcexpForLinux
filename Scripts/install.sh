@@ -150,17 +150,25 @@ if [[ -n "${TARBALL}" ]]; then
   # uninstall keeps working if a future release adds a file.
   install -d "$(dirname "${MANIFEST}")"
   tar -tzf "${TARBALL}" | grep -v '/$' | sed 's|^\./|/|' > "${MANIFEST}"
-  # --no-same-owner: everything must end up root-owned, whatever uid built the
-  # tarball. The helper runs as root, so a user-owned helper binary would be a
-  # privilege escalation.
-  tar -xzf "${TARBALL}" -C / --no-same-owner
+  # Extracted to a scratch tree first, then placed by cp, because tar cannot
+  # replace files in a live tree: an in-use binary must be unlinked rather
+  # than truncated (ETXTBSY), and tar's --unlink-first refuses the non-empty
+  # directories it meets on the way. --no-same-owner: everything must end up
+  # root-owned, whatever uid built the tarball — the helper runs as root, so
+  # a user-owned helper binary would be a privilege escalation.
+  scratch="$(mktemp -d)"
+  tar -xzf "${TARBALL}" -C "${scratch}" --no-same-owner
+  cp -a --remove-destination "${scratch}/." /
+  rm -rf "${scratch}"
 elif [[ -d "${STAGE}" ]]; then
   install -d "$(dirname "${MANIFEST}")"
   # Symlinks too: /usr/bin/procexp is one.
   (cd "${STAGE}" && find . -type f -o -type l | sed 's|^\./|/|') > "${MANIFEST}"
   # --no-preserve=ownership for the same reason as --no-same-owner above: the
-  # stage tree is owned by whoever built it, and the installed files must not be.
-  cp -a --no-preserve=ownership "${STAGE}/." /
+  # stage tree is owned by whoever built it, and the installed files must not
+  # be. --remove-destination for the same reason as --unlink-first: a running
+  # helper's binary cannot be truncated, only replaced.
+  cp -a --no-preserve=ownership --remove-destination "${STAGE}/." /
 else
   # Deliberately not built from here: this script runs as root, and a build
   # pulls NuGet packages and runs their toolchain, which should happen as you.
@@ -172,6 +180,13 @@ fi
 
 refresh_caches
 echo "Installed procexp, procexp-smoke and the helper files."
+
+# Replacing the file does not replace the process: a running helper keeps its
+# old binary mapped, so restart it to make what runs match what is installed.
+if have systemctl && systemctl is-active --quiet procexp-helper; then
+  systemctl restart procexp-helper
+  echo "Restarted the running helper so it picks up the new binary."
+fi
 
 # --- Activate the helper ----------------------------------------------------
 

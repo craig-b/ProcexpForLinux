@@ -385,6 +385,7 @@ public partial class MainWindow : Window
     private void WireMenus()
     {
         Get<MenuItem>("MenuExit").Click += (_, _) => Close();
+        Get<MenuItem>("MenuRun").Click += (_, _) => new RunDialog().ShowDialog(this);
         Get<MenuItem>("MenuSave").Click += (_, _) => _ = SaveProcessListAsync();
 
         var alwaysOnTop = Get<MenuItem>("MenuAlwaysOnTop");

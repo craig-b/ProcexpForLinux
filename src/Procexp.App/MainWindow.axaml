@@ -10,6 +10,7 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
+                <MenuItem Name="MenuRun" Header="_Run..." InputGesture="Ctrl+R" />
                 <MenuItem Name="MenuSave" Header="_Save Process List..." InputGesture="Ctrl+S" />
                 <Separator />
                 <MenuItem Name="MenuExit" Header="E_xit" />

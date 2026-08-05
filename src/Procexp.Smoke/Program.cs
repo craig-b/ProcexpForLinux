@@ -423,6 +423,14 @@ Console.WriteLine("\nSockets");
 
 var network = new NetworkProvider();
 
+// Listen on loopback for the duration of the sweep. A listener we own is the
+// one socket every environment can be asked about: a CI runner has no
+// predictable services, and a machine's real listeners usually belong to root,
+// whose fd directories an unprivileged sweep cannot read.
+using var probeListener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+probeListener.Start();
+var probePort = (ushort)((System.Net.IPEndPoint)probeListener.LocalEndpoint).Port;
+
 // Find a process that actually holds sockets. Our own may hold none, so scan.
 var withSockets = new List<(ProcessRecord Process, IReadOnlyList<SocketInfo> Sockets)>();
 foreach (
@@ -473,15 +481,16 @@ Check(
     tcp.All(s => System.Net.IPAddress.TryParse(s.LocalAddress, out _))
 );
 
-// 127.0.0.1 is stored as 0100007F on a little-endian machine, so a loopback
-// listener proves the word-swap is right rather than accidentally symmetric.
-var loopback = tcp.FirstOrDefault(s => s.LocalAddress == "127.0.0.1");
+// 127.0.0.1 is stored as 0100007F on a little-endian machine, and the port is
+// byte-swapped separately. Finding the probe listener by port and asserting
+// its address proves both decodes rather than either accidentally symmetric.
+var probe = tcp.FirstOrDefault(s => s.State == "LISTEN" && s.LocalPort == probePort);
 Check(
     "little-endian address decoding is correct",
-    loopback is not null || tcp.Count == 0,
-    loopback is null
-        ? "no loopback listener to check"
-        : $"{loopback.LocalAddress}:{loopback.LocalPort}"
+    probe is not null && probe.LocalAddress == "127.0.0.1",
+    probe is null
+        ? $"probe listener on port {probePort} not found in the sweep"
+        : $"{probe.LocalAddress}:{probe.LocalPort}"
 );
 
 var unix = allSockets.Where(s => s.Protocol == SocketProtocol.Unix).ToList();
@@ -678,20 +687,28 @@ CheckWhere(
     gpu.IsAvailable
 );
 
+// The metric files are optional per driver: amdgpu publishes them, i915 and
+// the virtual devices a CI VM exposes do not. /sys/class/drm existing proves
+// nothing about a card, so each read is asserted only where its file exists —
+// a machine without it is a smaller feature, not a failure. See the README.
+var drmCards = gpu.IsAvailable ? Directory.GetDirectories("/sys/class/drm", "card*") : [];
+var hasBusyMetric = drmCards.Any(c => File.Exists(Path.Combine(c, "device", "gpu_busy_percent")));
+var hasVramMetric = drmCards.Any(c => File.Exists(Path.Combine(c, "device", "mem_info_vram_used")));
+
 var totalGpu = await gpu.TotalGpuPercentAsync();
 CheckWhere(
-    gpu.IsAvailable,
-    "no GPU",
+    hasBusyMetric,
+    "driver publishes no gpu_busy_percent",
     "aggregate GPU busy read",
     totalGpu is not null,
-    totalGpu is null ? "driver publishes no gpu_busy_percent" : $"{totalGpu:F0}%"
+    totalGpu is null ? null : $"{totalGpu:F0}%"
 );
 Check("aggregate GPU busy is in range", totalGpu is null or (>= 0 and <= 100));
 
 var videoMemory = gpu.VideoMemory();
 CheckWhere(
-    gpu.IsAvailable,
-    "no GPU",
+    hasVramMetric,
+    "driver publishes no mem_info_vram",
     "video memory read",
     videoMemory is not null,
     videoMemory is null
@@ -706,9 +723,13 @@ var firstGpuWalk = gpuWatch.Elapsed;
 await Task.Delay(700);
 var (gpuPercentages, gpuMemory) = gpu.Sample();
 
+// Gated on a metrics-capable card rather than mere DRM presence: a virtual
+// framebuffer has no clients to discover, and a headless box with no
+// compositor legitimately has none either. A desktop with a real GPU always
+// has at least the compositor as a client.
 CheckWhere(
-    gpu.IsAvailable && !isContainerLike,
-    "no DRM device visible here",
+    hasBusyMetric && !isContainerLike,
+    "no metrics-capable GPU here",
     "per-process GPU clients discovered",
     gpuMemory.Count > 0 || gpuPercentages.Count > 0,
     $"{gpuMemory.Count} clients with resident memory, {gpuPercentages.Count} busy"
@@ -928,16 +949,52 @@ var privileged = new PrivilegedClient();
 
 if (PrivilegedClient.IsAvailable)
 {
-    Check("helper handshake succeeds", await privileged.HandshakeAsync());
-
-    if (init is not null)
+    // The kernel checks group membership at connect time, so a user outside
+    // the procexp group is refused with EACCES — including one added to the
+    // group who has not logged back in yet. That is the trust model working,
+    // not a helper fault, so it skips rather than fails.
+    var accessDenied = false;
+    try
     {
-        var io = await privileged.ReadIoAsync(init.Id);
-        Check(
-            "helper supplies I/O for a root process",
-            io is not null,
-            io is null ? null : $"read {ValueFormat.Bytes(io.Value.Read)}"
+        using var socketProbe = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.Unix,
+            System.Net.Sockets.SocketType.Stream,
+            System.Net.Sockets.ProtocolType.Unspecified
         );
+        await socketProbe.ConnectAsync(
+            new System.Net.Sockets.UnixDomainSocketEndPoint(HelperConstants.SocketPath)
+        );
+    }
+    catch (System.Net.Sockets.SocketException e)
+        when (e.SocketErrorCode == System.Net.Sockets.SocketError.AccessDenied)
+    {
+        accessDenied = true;
+    }
+    catch (System.Net.Sockets.SocketException)
+    {
+        // Any other connect failure is the handshake check's to report.
+    }
+
+    if (accessDenied)
+    {
+        Skip(
+            "helper handshake succeeds",
+            "socket present but this user is not in the procexp group (re-login if just added)"
+        );
+    }
+    else
+    {
+        Check("helper handshake succeeds", await privileged.HandshakeAsync());
+
+        if (init is not null)
+        {
+            var io = await privileged.ReadIoAsync(init.Id);
+            Check(
+                "helper supplies I/O for a root process",
+                io is not null,
+                io is null ? null : $"read {ValueFormat.Bytes(io.Value.Read)}"
+            );
+        }
     }
 }
 else

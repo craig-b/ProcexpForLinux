@@ -36,11 +36,15 @@ command -v docker > /dev/null 2>&1 || {
 rm -rf "${OUT}"
 mkdir -p "${OUT}"
 
+# The version travels as PROCEXP_VERSION, not VERSION: MSBuild promotes
+# environment variables to global properties, so a variable literally named
+# VERSION becomes $(Version), and a git describe string is not a valid one —
+# the build dies before compiling a single file.
 docker run --rm \
   -v "${ROOT}:/src:ro" \
   -v "${OUT}:/out" \
   -e RID="${RID}" \
-  -e VERSION="${VERSION}" \
+  -e PROCEXP_VERSION="${VERSION}" \
   "${IMAGE}" sh -c '
         set -e
         apk add --no-cache clang build-base zlib-dev >/dev/null
@@ -60,9 +64,9 @@ docker run --rm \
                 -p:PublishAot=true \
                 -p:StripSymbols=true \
                 -p:InvariantGlobalization=true \
-                -p:InformationalVersion="${VERSION}" \
+                -p:InformationalVersion="${PROCEXP_VERSION}" \
                 --output "/out/${name}" \
-                --nologo >/dev/null
+                --nologo
         done
     '
 

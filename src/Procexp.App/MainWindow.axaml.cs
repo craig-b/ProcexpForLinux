@@ -792,23 +792,10 @@ public partial class MainWindow : Window
             await using var stream = await file.OpenWriteAsync().ConfigureAwait(true);
             await using var writer = new StreamWriter(stream);
 
-            await writer
-                .WriteLineAsync(
-                    string.Join('\t', _columns.Columns.Select(c => Columns.Title(c.Column)))
-                )
-                .ConfigureAwait(true);
-
-            foreach (var row in rows)
+            var columns = _columns.Columns.Select(c => c.Column).ToList();
+            foreach (var line in ProcessListWriter.Lines(columns, rows))
             {
-                var indent = new string(' ', row.Depth * 2);
-                var cells = _columns.Columns.Select(
-                    (c, i) =>
-                        i == 0
-                            ? indent + Columns.Format(c.Column, row.Process)
-                            : Columns.Format(c.Column, row.Process)
-                );
-
-                await writer.WriteLineAsync(string.Join('\t', cells)).ConfigureAwait(true);
+                await writer.WriteLineAsync(line).ConfigureAwait(true);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

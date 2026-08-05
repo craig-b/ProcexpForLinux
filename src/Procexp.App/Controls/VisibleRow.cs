@@ -1,3 +1,4 @@
+using System.Globalization;
 using Procexp.Model;
 
 namespace Procexp.App.Controls;
@@ -30,15 +31,19 @@ public static class RowFlattener
         HashSet<ProcessId> collapsed,
         Column sortColumn,
         bool descending,
-        bool treeMode
+        bool treeMode,
+        string? filter = null
     )
     {
         var rows = new List<VisibleRow>(snapshot.Processes.Count);
+        var haveFilter = !string.IsNullOrWhiteSpace(filter);
 
         if (!treeMode)
         {
-            // Flat list: every process at depth zero, sorted as a whole.
-            var all = snapshot.Processes.Values.ToList();
+            // Flat list: every matching process at depth zero, sorted as a whole.
+            var all = snapshot
+                .Processes.Values.Where(p => !haveFilter || Matches(p, filter!))
+                .ToList();
             Sort(all, sortColumn, descending);
 
             foreach (var process in all)
@@ -49,9 +54,38 @@ public static class RowFlattener
             return rows;
         }
 
+        // In tree mode a match keeps its ancestors, so a hit deep in the tree
+        // stays reachable rather than appearing as an orphan.
+        HashSet<ProcessId>? visible = null;
+        if (haveFilter)
+        {
+            visible = [];
+            foreach (var record in snapshot.Processes.Values)
+            {
+                if (!Matches(record, filter!))
+                {
+                    continue;
+                }
+
+                var current = record;
+                while (visible.Add(current.Id))
+                {
+                    if (
+                        current.Parent is not { } parentId
+                        || !snapshot.Processes.TryGetValue(parentId, out var parent)
+                    )
+                    {
+                        break;
+                    }
+
+                    current = parent;
+                }
+            }
+        }
+
         var roots = snapshot
             .Roots.Select(id => snapshot.Processes.GetValueOrDefault(id))
-            .Where(p => p is not null)
+            .Where(p => p is not null && (visible is null || visible.Contains(p.Id)))
             .Select(p => p!)
             .ToList();
 
@@ -66,8 +100,14 @@ public static class RowFlattener
 
         void Walk(ProcessRecord process, int depth)
         {
-            var childIds = snapshot.ChildIds(process.Id);
-            var isCollapsed = collapsed.Contains(process.Id);
+            var childIds = snapshot
+                .ChildIds(process.Id)
+                .Where(id => visible is null || visible.Contains(id))
+                .ToList();
+
+            // Collapse is suspended while filtering: a collapsed parent must
+            // not hide the match the user just typed to find.
+            var isCollapsed = visible is null && collapsed.Contains(process.Id);
 
             rows.Add(new VisibleRow(process, depth, childIds.Count > 0, !isCollapsed));
 
@@ -90,6 +130,17 @@ public static class RowFlattener
             }
         }
     }
+
+    /// <summary>
+    /// Whether a process matches the filter text: by name, pid, user or
+    /// command line, the same fields the macOS filter searches.
+    /// </summary>
+    public static bool Matches(ProcessRecord p, string filter) =>
+        p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+        || p.Id.Pid.ToString(CultureInfo.InvariantCulture)
+            .Contains(filter, StringComparison.Ordinal)
+        || (p.UserName?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (p.CommandLine?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
 
     /// <summary>
     /// Sort a sibling group.

@@ -54,6 +54,7 @@ public partial class MainWindow : Window
 
     private bool _paused;
     private double _intervalSeconds = 1.0;
+    private string _filter = "";
 
     private readonly AppSettings _settings = SettingsStore.Load();
     private bool _enrichmentDirty;
@@ -352,6 +353,22 @@ public partial class MainWindow : Window
             Rebuild();
             ScheduleSave();
         };
+
+        var filterBox = Get<TextBox>("FilterBox");
+        filterBox.TextChanged += (_, _) =>
+        {
+            _filter = filterBox.Text ?? "";
+            Rebuild();
+        };
+        filterBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                filterBox.Text = "";
+                _tree.Focus();
+                e.Handled = true;
+            }
+        };
     }
 
     private void WireMenus()
@@ -441,6 +458,23 @@ public partial class MainWindow : Window
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+        {
+            var filterBox = Get<TextBox>("FilterBox");
+            filterBox.Focus();
+            filterBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        // Typing in the filter box must stay typing: a space there is a
+        // character, not the pause shortcut.
+        if (e.Source is TextBox)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
         // Space pauses, as it does in Process Explorer. Handled here rather than
         // as a menu gesture so it works whatever has focus inside the window.
         if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None)
@@ -585,7 +619,8 @@ public partial class MainWindow : Window
             _collapsed,
             _tree.SortColumn,
             _tree.SortDescending,
-            treeMode: Get<ToggleSwitch>("TreeToggle").IsChecked == true
+            treeMode: Get<ToggleSwitch>("TreeToggle").IsChecked == true,
+            filter: _filter
         );
 
         _tree.SetRows(rows, _columns);

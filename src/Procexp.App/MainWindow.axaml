@@ -193,6 +193,13 @@
                     IsChecked="True"
                     MinWidth="100"
                 />
+                <Rectangle Width="1" Margin="4,2" Fill="#40808080" />
+                <TextBox
+                    Name="FilterBox"
+                    Watermark="Filter (Ctrl+Shift+F)"
+                    MinWidth="170"
+                    VerticalAlignment="Center"
+                />
             </StackPanel>
         </Border>
 

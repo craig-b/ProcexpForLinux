@@ -35,6 +35,18 @@ public sealed class ProcessPropertiesWindow : Window
     private readonly DataTableView<SocketInfo> _sockets = new();
     private readonly DataTableView<EnvironmentEntry> _environment = new();
     private readonly DataTableView<StringEntry> _strings = new();
+    private readonly TextBox _stringsFilter = new()
+    {
+        PlaceholderText = "Filter",
+        MinWidth = 180,
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+    };
+    private readonly TextBlock _stringsCount = new()
+    {
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        Opacity = 0.7,
+    };
+    private IReadOnlyList<string> _allStrings = [];
 
     private readonly HistoryGraphView _cpuGraph = new()
     {
@@ -124,7 +136,7 @@ public sealed class ProcessPropertiesWindow : Window
                 new TabItem { Header = "TCP/IP", Content = _sockets },
                 new TabItem { Header = "Provenance", Content = _provenanceDetail },
                 new TabItem { Header = "Environment", Content = _environment },
-                new TabItem { Header = "Strings", Content = _strings },
+                new TabItem { Header = "Strings", Content = BuildStringsPanel() },
             },
         };
 
@@ -238,6 +250,73 @@ public sealed class ProcessPropertiesWindow : Window
 
         static string Endpoint(string address, ushort port) =>
             address.Length == 0 ? "" : $"{address}:{port}";
+    }
+
+    /// <summary>
+    /// The Strings tab: a filter, a match counter and Save above the table —
+    /// mirroring the macOS StringsTab.
+    /// </summary>
+    private Control BuildStringsPanel()
+    {
+        var save = new Button { Content = "Save…" };
+        save.Click += (_, _) => _ = SaveStringsAsync();
+
+        _stringsFilter.TextChanged += (_, _) => ApplyStringsFilter();
+
+        var bar = new DockPanel { Margin = new Thickness(8, 8, 8, 4) };
+        DockPanel.SetDock(save, Dock.Right);
+        DockPanel.SetDock(_stringsCount, Dock.Right);
+        _stringsCount.Margin = new Thickness(8, 0);
+        bar.Children.Add(save);
+        bar.Children.Add(_stringsCount);
+        bar.Children.Add(_stringsFilter);
+
+        var panel = new DockPanel();
+        DockPanel.SetDock(bar, Dock.Top);
+        panel.Children.Add(bar);
+        panel.Children.Add(_strings);
+        return panel;
+    }
+
+    private IEnumerable<string> FilteredStrings()
+    {
+        var filter = _stringsFilter.Text;
+        return string.IsNullOrEmpty(filter)
+            ? _allStrings
+            : _allStrings.Where(s => s.Contains(filter, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ApplyStringsFilter()
+    {
+        var filtered = FilteredStrings().ToList();
+        _strings.SetRows([.. filtered.Select((s, i) => new StringEntry(i, s))]);
+        _stringsCount.Text =
+            filtered.Count == _allStrings.Count
+                ? $"{_allStrings.Count:N0} strings"
+                : $"{filtered.Count:N0} of {_allStrings.Count:N0}";
+    }
+
+    private async Task SaveStringsAsync()
+    {
+        var file = await StorageProvider
+            .SaveFilePickerAsync(
+                new() { Title = "Save Strings", SuggestedFileName = $"{_record.Name}-strings.txt" }
+            )
+            .ConfigureAwait(true);
+
+        if (file is null)
+        {
+            return;
+        }
+
+        // What is saved is what is shown: with a filter active, the filtered
+        // set is almost always the thing the user went looking for.
+        await using var stream = await file.OpenWriteAsync().ConfigureAwait(true);
+        await using var writer = new StreamWriter(stream);
+        foreach (var line in FilteredStrings())
+        {
+            await writer.WriteLineAsync(line).ConfigureAwait(true);
+        }
     }
 
     // ---- Population ---------------------------------------------------------
@@ -436,10 +515,10 @@ public sealed class ProcessPropertiesWindow : Window
 
                 case "Strings" when !_stringsLoaded:
                     _stringsLoaded = true;
-                    var strings = await _provider
+                    _allStrings = await _provider
                         .StringsAsync(_id, _lifetime.Token)
                         .ConfigureAwait(true);
-                    _strings.SetRows([.. strings.Select((s, i) => new StringEntry(i, s))]);
+                    ApplyStringsFilter();
                     break;
 
                 case "Provenance" when !_provenanceLoaded:
@@ -477,7 +556,8 @@ public sealed class ProcessPropertiesWindow : Window
                 break;
             case "Strings":
                 _strings.EmptyMessage = message;
-                _strings.SetRows([]);
+                _allStrings = [];
+                ApplyStringsFilter();
                 break;
         }
     }

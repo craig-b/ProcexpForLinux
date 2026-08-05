@@ -111,8 +111,10 @@ reasons below.
 
 | Path                                                 | Contents                                      |
 | ---------------------------------------------------- | --------------------------------------------- |
-| `/usr/bin/procexp`                                   | The application                               |
+| `/usr/bin/procexp`                                   | Symlink to the application                    |
 | `/usr/bin/procexp-smoke`                             | Headless data-layer checker                   |
+| `/usr/lib/procexp/procexp`                           | The application                               |
+| `/usr/lib/procexp/libSkiaSharp.so`, `libHarfBuzz…`   | Avalonia's renderer, loaded beside the binary |
 | `/usr/lib/procexp/procexp-helper`                    | Privileged helper — deliberately outside PATH |
 | `/usr/lib/systemd/system/procexp-helper.service`     | Helper unit, not enabled                      |
 | `/usr/share/applications/procexp.desktop`            | Desktop entry                                 |
@@ -120,6 +122,11 @@ reasons below.
 
 The helper sits outside `PATH` on purpose. It is started by systemd and never by a user, and
 offering it as a command invites someone to run it expecting a window.
+
+The GUI is _almost_ a single file: Native AOT emits one executable, but Avalonia's renderer —
+SkiaSharp and HarfBuzz — ships as native shared libraries that must sit next to it. Hence the
+symlink arrangement: the loader resolves `/proc/self/exe` through the link, so the libraries are
+found beside the real binary in `/usr/lib/procexp`.
 
 ## The helper is not enabled by default
 

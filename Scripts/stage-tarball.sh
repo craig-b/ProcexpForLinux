@@ -21,7 +21,17 @@ mkdir -p "${STAGE}/usr/bin" "${STAGE}/usr/lib/procexp" \
   "${STAGE}/usr/share/applications" "${STAGE}/usr/share/icons/hicolor/scalable/apps" \
   "${STAGE}/usr/lib/systemd/system"
 
-install -Dm755 "${BINDIR}/procexp/procexp" "${STAGE}/usr/bin/procexp"
+# Native AOT emits one executable, but Avalonia's renderer does not follow:
+# SkiaSharp and HarfBuzz ship as shared libraries that must sit next to the
+# real binary. So the GUI lives in /usr/lib/procexp with its libraries and
+# /usr/bin/procexp is a symlink — the loader resolves /proc/self/exe through
+# the link, so the libraries are found beside the target.
+install -Dm755 "${BINDIR}/procexp/procexp" "${STAGE}/usr/lib/procexp/procexp"
+for lib in "${BINDIR}/procexp/"*.so; do
+  install -Dm755 "${lib}" "${STAGE}/usr/lib/procexp/$(basename "${lib}")"
+done
+ln -s ../lib/procexp/procexp "${STAGE}/usr/bin/procexp"
+
 install -Dm755 "${BINDIR}/procexp-smoke/procexp-smoke" "${STAGE}/usr/bin/procexp-smoke"
 
 # The helper lives outside PATH: it is started by systemd, never by a user, and
@@ -31,6 +41,14 @@ install -Dm755 "${BINDIR}/procexp-helper/procexp-helper" "${STAGE}/usr/lib/proce
 install -Dm644 "${ROOT}/packaging/procexp.desktop" "${STAGE}/usr/share/applications/procexp.desktop"
 install -Dm644 "${ROOT}/packaging/procexp.svg" "${STAGE}/usr/share/icons/hicolor/scalable/apps/procexp.svg"
 install -Dm644 "${ROOT}/packaging/procexp-helper.service" "${STAGE}/usr/lib/systemd/system/procexp-helper.service"
+
+# The GUI is unrunnable without its renderer, and nothing else in the pipeline
+# executes it (CI verifies the smoke checker, which needs no display) — so the
+# one place that can catch a missing library is here, structurally.
+[[ -f "${STAGE}/usr/lib/procexp/libSkiaSharp.so" ]] || {
+  echo "libSkiaSharp.so missing from the publish output — the GUI cannot start without it." >&2
+  exit 1
+}
 
 VERSION="$(git -C "${ROOT}" describe --tags --always --dirty 2> /dev/null || echo dev)"
 TARBALL="${ROOT}/artifacts/procexp-${VERSION}-${RID}.tar.gz"

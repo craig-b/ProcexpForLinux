@@ -34,6 +34,9 @@ MANIFEST=/usr/share/procexp/manifest
 FALLBACK_FILES=(
   /usr/bin/procexp
   /usr/bin/procexp-smoke
+  /usr/lib/procexp/procexp
+  /usr/lib/procexp/libSkiaSharp.so
+  /usr/lib/procexp/libHarfBuzzSharp.so
   /usr/lib/procexp/procexp-helper
   /usr/lib/systemd/system/procexp-helper.service
   /usr/share/applications/procexp.desktop
@@ -153,7 +156,8 @@ if [[ -n "${TARBALL}" ]]; then
   tar -xzf "${TARBALL}" -C / --no-same-owner
 elif [[ -d "${STAGE}" ]]; then
   install -d "$(dirname "${MANIFEST}")"
-  (cd "${STAGE}" && find . -type f | sed 's|^\./|/|') > "${MANIFEST}"
+  # Symlinks too: /usr/bin/procexp is one.
+  (cd "${STAGE}" && find . -type f -o -type l | sed 's|^\./|/|') > "${MANIFEST}"
   # --no-preserve=ownership for the same reason as --no-same-owner above: the
   # stage tree is owned by whoever built it, and the installed files must not be.
   cp -a --no-preserve=ownership "${STAGE}/." /

@@ -11,8 +11,11 @@
 # Detects architecture and libc, downloads the matching release tarball,
 # verifies its checksum, and runs Scripts/install.sh against it under sudo.
 # POSIX sh throughout, because a pipe runs under sh — often dash or busybox —
-# not bash. Environment overrides: PROCEXP_VERSION pins a tag (default:
-# latest release); PROCEXP_REPO redirects to a fork.
+# not bash.
+#
+# This script's own flags: --version <tag> pins a release, --reinstall installs
+# over an identical version. Both also available as PROCEXP_VERSION; a fork is
+# PROCEXP_REPO. Every other flag is passed to the installer.
 #
 set -eu
 
@@ -20,21 +23,36 @@ REPO="${PROCEXP_REPO:-craig-b/ProcexpForLinux}"
 VERSION="${PROCEXP_VERSION:-}"
 INSTALLED_VERSION_FILE=/usr/share/procexp/version
 
-# --reinstall belongs to this script, not the installer: it defeats the
-# up-to-date short-circuit below. Filter it out while preserving the rest.
+# --reinstall and --version belong to this script, not the installer: one
+# defeats the up-to-date short-circuit below, the other picks what to
+# download. Filter them out while preserving everything else for install.sh.
 REINSTALL=no
 i=0
 n=$#
+take_version=no
 while [ "$i" -lt "$n" ]; do
   arg="$1"
   shift
-  if [ "$arg" = "--reinstall" ]; then
-    REINSTALL=yes
-  else
-    set -- "$@" "$arg"
-  fi
   i=$((i + 1))
+
+  if [ "${take_version}" = yes ]; then
+    VERSION="$arg"
+    take_version=no
+    continue
+  fi
+
+  case "$arg" in
+    --reinstall) REINSTALL=yes ;;
+    --version) take_version=yes ;;
+    --version=*) VERSION="${arg#--version=}" ;;
+    *) set -- "$@" "$arg" ;;
+  esac
 done
+
+[ "${take_version}" = no ] || {
+  printf 'get-procexp: --version needs a tag, e.g. --version v0.2.0\n' >&2
+  exit 1
+}
 
 die() {
   printf 'get-procexp: %s\n' "$*" >&2
@@ -84,13 +102,44 @@ fi
 
 # --- Download and verify ----------------------------------------------------
 
+# Resolve "latest" from the web redirect rather than the API.
+#
+# api.github.com allows 60 unauthenticated requests per hour per IP, which is
+# easy to exhaust from behind NAT, a VPN or a CI runner — and the failure is a
+# 403 at exactly the moment someone is trying to install. The plain
+# /releases/latest URL redirects to /releases/tag/<tag> with no such limit, so
+# the tag comes from the redirect target. The API stays as a fallback for the
+# case where the redirect shape ever changes.
+resolve_latest() {
+  if command -v curl > /dev/null 2>&1; then
+    curl -fsSLI -o /dev/null -w '%{url_effective}' \
+      "https://github.com/${REPO}/releases/latest" 2> /dev/null \
+      | sed -n 's|.*/releases/tag/||p'
+  else
+    wget -qS --spider --max-redirect 10 \
+      "https://github.com/${REPO}/releases/latest" 2>&1 \
+      | sed -n 's|^ *Location: .*/releases/tag/\([^ ]*\).*|\1|p' \
+      | tail -n 1
+  fi
+}
+
 if [ -z "${VERSION}" ]; then
-  VERSION="$(
-    fetch "https://api.github.com/repos/${REPO}/releases/latest" - \
-      | sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p' \
-      | head -n 1
-  )"
-  [ -n "${VERSION}" ] || die "could not determine the latest release of ${REPO}"
+  VERSION="$(resolve_latest || true)"
+
+  if [ -z "${VERSION}" ]; then
+    VERSION="$(
+      fetch "https://api.github.com/repos/${REPO}/releases/latest" - 2> /dev/null \
+        | sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p' \
+        | head -n 1
+    )" || true
+  fi
+
+  if [ -z "${VERSION}" ]; then
+    printf 'get-procexp: could not determine the latest release of %s.\n' "${REPO}" >&2
+    printf 'Pick a version from https://github.com/%s/releases and retry:\n' "${REPO}" >&2
+    printf '  ... | sh -s -- --version v0.2.0\n' >&2
+    exit 1
+  fi
 fi
 
 # Nothing to do when the machine already runs the version being asked for —

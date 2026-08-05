@@ -46,6 +46,12 @@
                     InputGesture="Ctrl+I"
                 />
                 <Separator />
+                <MenuItem Name="MenuColumnSets" Header="Column _Sets">
+                    <MenuItem Name="MenuSaveColumnSet" Header="Save Current Set..." />
+                    <MenuItem Name="MenuOrganizeColumnSets" Header="Organize Sets..." />
+                    <Separator Name="MenuColumnSetsSeparator" />
+                </MenuItem>
+                <Separator />
                 <MenuItem
                     Name="MenuTreeMode"
                     Header="Show Process _Tree"

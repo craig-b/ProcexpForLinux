@@ -161,6 +161,7 @@ public partial class MainWindow : Window
         _list.HighlightNewAndDead = _settings.HighlightNewAndDead;
         _intervalSeconds = _settings.RefreshSeconds;
         _confirmActions = _settings.ConfirmActions;
+        _columnSets = _settings.ColumnSets;
         ApplyOptions(
             _settings.ConfirmActions,
             _settings.HighlightSeconds,
@@ -234,6 +235,7 @@ public partial class MainWindow : Window
                 HighlightSeconds = _list.HighlightDuration.TotalSeconds,
                 ConfirmActions = _confirmActions,
                 ColorRules = ColorRuleSetting.FromRules(_colorRules),
+                ColumnSets = _columnSets,
                 AlwaysOnTop = Topmost,
                 NamePaneWidth = _tree.NamePaneWidth,
                 WindowWidth = Width,
@@ -448,6 +450,9 @@ public partial class MainWindow : Window
         Get<MenuItem>("MenuSystemInfo").Click += (_, _) => ShowSystemInfo();
         Get<MenuItem>("MenuColumns").Click += (_, _) => _ = ChooseColumnsAsync();
         Get<MenuItem>("MenuSettings").Click += (_, _) => _ = ShowSettingsAsync();
+        Get<MenuItem>("MenuSaveColumnSet").Click += (_, _) => _ = SaveColumnSetAsync();
+        Get<MenuItem>("MenuOrganizeColumnSets").Click += (_, _) => _ = OrganizeColumnSetsAsync();
+        RebuildColumnSetsMenu();
         Get<MenuItem>("MenuFind").Click += (_, _) => ShowFind();
 
         void WireSpeed(string name, double seconds) =>
@@ -796,6 +801,82 @@ public partial class MainWindow : Window
         );
         _systemInfo.Closed += (_, _) => _systemInfo = null;
         _systemInfo.Show(this);
+    }
+
+    // ---- Column sets --------------------------------------------------------
+
+    private IReadOnlyList<ColumnSet> _columnSets = [];
+
+    /// <summary>
+    /// Rebuild the Column Sets menu: the two commands, then one item per saved
+    /// set. Rebuilt rather than bound, since the menu is the only view of them.
+    /// </summary>
+    private void RebuildColumnSetsMenu()
+    {
+        var menu = Get<MenuItem>("MenuColumnSets");
+        var fixedItems = menu.Items.OfType<Control>().Take(3).ToList();
+
+        menu.Items.Clear();
+        foreach (var item in fixedItems)
+        {
+            menu.Items.Add(item);
+        }
+
+        Get<Separator>("MenuColumnSetsSeparator").IsVisible = _columnSets.Count > 0;
+
+        foreach (var set in _columnSets)
+        {
+            var item = new MenuItem { Header = set.Name };
+            var columns = set.Columns;
+            item.Click += (_, _) =>
+            {
+                ApplyColumns(columns);
+                _tree.SetRows([], _columns);
+                Rebuild();
+                ScheduleSave();
+            };
+            menu.Items.Add(item);
+        }
+    }
+
+    private async Task SaveColumnSetAsync()
+    {
+        var prompt = new TextPromptDialog(
+            "Save Column Set",
+            "Name for this column layout:",
+            $"Set {_columnSets.Count + 1}"
+        );
+        await prompt.ShowDialog(this).ConfigureAwait(true);
+
+        if (prompt.Result is not { } name)
+        {
+            return;
+        }
+
+        // Saving over an existing name replaces it, which is what a user
+        // re-saving a tweaked layout means.
+        var columns = _columns.Select(c => c.Column).ToList();
+        _columnSets =
+        [
+            .. _columnSets.Where(s => s.Name != name),
+            new ColumnSet { Name = name, Columns = columns },
+        ];
+
+        RebuildColumnSetsMenu();
+        ScheduleSave();
+    }
+
+    private async Task OrganizeColumnSetsAsync()
+    {
+        var window = new ColumnSetsWindow(_columnSets);
+        await window.ShowDialog(this).ConfigureAwait(true);
+
+        if (window.Result is { } kept)
+        {
+            _columnSets = kept;
+            RebuildColumnSetsMenu();
+            ScheduleSave();
+        }
     }
 
     private async Task ChooseColumnsAsync()

@@ -1,6 +1,6 @@
 [Unit]
 Description=Process Explorer privileged helper
-Documentation=https://github.com/microsoft/ProcexpForLinux
+Documentation=https://github.com/craig-b/ProcexpForLinux
 
 [Service]
 Type=simple

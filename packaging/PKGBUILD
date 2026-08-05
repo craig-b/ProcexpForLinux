@@ -4,7 +4,7 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc="Sysinternals Process Explorer for Linux"
 arch=('x86_64')
-url="https://github.com/microsoft/ProcexpForLinux"
+url="https://github.com/craig-b/ProcexpForLinux"
 license=('MIT')
 
 # Native AOT binaries: no runtime dependency on dotnet at all. The build needs

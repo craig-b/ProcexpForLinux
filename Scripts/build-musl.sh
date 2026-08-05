@@ -23,6 +23,10 @@ IMAGE="mcr.microsoft.com/dotnet/sdk:10.0-alpine"
 # different architecture run this on hardware (or emulation) of that kind.
 RID="${RID:-linux-musl-x64}"
 
+# Stamped into the binaries so the About window can say which build it is.
+# Computed here because the container has no git.
+VERSION="$(git -C "${ROOT}" describe --tags --always --dirty 2> /dev/null || echo dev)"
+
 command -v docker > /dev/null 2>&1 || {
   echo "docker is required to build musl binaries from a non-Alpine host." >&2
   echo "On Alpine itself, use Scripts/build-release.sh with RID=linux-musl-x64." >&2
@@ -36,6 +40,7 @@ docker run --rm \
   -v "${ROOT}:/src:ro" \
   -v "${OUT}:/out" \
   -e RID="${RID}" \
+  -e VERSION="${VERSION}" \
   "${IMAGE}" sh -c '
         set -e
         apk add --no-cache clang build-base zlib-dev >/dev/null
@@ -55,6 +60,7 @@ docker run --rm \
                 -p:PublishAot=true \
                 -p:StripSymbols=true \
                 -p:InvariantGlobalization=true \
+                -p:InformationalVersion="${VERSION}" \
                 --output "/out/${name}" \
                 --nologo >/dev/null
         done

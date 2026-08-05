@@ -421,7 +421,7 @@ public partial class MainWindow : Window
         WireNice("MenuNiceLow", 5);
         WireNice("MenuNiceLowest", 19);
 
-        Get<MenuItem>("MenuAbout").Click += (_, _) => _ = ShowAboutAsync();
+        Get<MenuItem>("MenuAbout").Click += (_, _) => ShowAbout();
         Get<MenuItem>("MenuProperties").Click += (_, _) => ShowProperties();
         Get<MenuItem>("MenuSystemInfo").Click += (_, _) => ShowSystemInfo();
         Get<MenuItem>("MenuColumns").Click += (_, _) => _ = ChooseColumnsAsync();
@@ -901,15 +901,7 @@ public partial class MainWindow : Window
             .ConfigureAwait(true);
     }
 
-    private Task ShowAboutAsync() =>
-        ConfirmationDialog.ShowMessageAsync(
-            this,
-            "About Process Explorer",
-            "Sysinternals Process Explorer for Linux\n\n"
-                + "A Linux implementation of the Process Explorer experience, built on /proc.\n\n"
-                + $"Running on {Environment.OSVersion.VersionString}\n"
-                + $".NET {Environment.Version}"
-        );
+    private void ShowAbout() => new AboutWindow().ShowDialog(this);
 
     // ---- Helpers ------------------------------------------------------------
 

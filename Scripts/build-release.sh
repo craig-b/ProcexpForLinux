@@ -23,6 +23,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/artifacts"
 RID="${RID:-linux-x64}"
 
+# Stamped into the binaries so the About window can say which build it is.
+VERSION="$(git -C "${ROOT}" describe --tags --always --dirty 2> /dev/null || echo dev)"
+
 rm -rf "${OUT}"
 mkdir -p "${OUT}"
 
@@ -37,6 +40,7 @@ publish() {
     -p:PublishAot=true \
     -p:StripSymbols=true \
     -p:InvariantGlobalization=true \
+    -p:InformationalVersion="${VERSION}" \
     --output "${OUT}/${name}" \
     --nologo
 }

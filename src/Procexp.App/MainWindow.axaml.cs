@@ -55,6 +55,8 @@ public partial class MainWindow : Window
     private bool _paused;
     private double _intervalSeconds = 1.0;
     private string _filter = "";
+    private bool _confirmActions = true;
+    private IReadOnlyList<ProcessColorRule> _colorRules = ProcessColorRule.Defaults;
 
     private readonly AppSettings _settings = SettingsStore.Load();
     private bool _enrichmentDirty;
@@ -69,7 +71,7 @@ public partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
 
-        _actions = new ActionCoordinator(this);
+        _actions = new ActionCoordinator(this, () => _confirmActions);
         _tree = Get<ProcessTreeView>("Tree");
         _verticalScroll = Get<ScrollBar>("VerticalScroll");
         _horizontalScroll = Get<ScrollBar>("HorizontalScroll");
@@ -158,6 +160,12 @@ public partial class MainWindow : Window
         _tree.NamePaneWidth = _settings.NamePaneWidth;
         _list.HighlightNewAndDead = _settings.HighlightNewAndDead;
         _intervalSeconds = _settings.RefreshSeconds;
+        _confirmActions = _settings.ConfirmActions;
+        ApplyOptions(
+            _settings.ConfirmActions,
+            _settings.HighlightSeconds,
+            ColorRuleSetting.ToRules(_settings.ColorRules)
+        );
 
         Width = _settings.WindowWidth;
         Height = _settings.WindowHeight;
@@ -223,6 +231,9 @@ public partial class MainWindow : Window
                 LowerPaneMode = _lowerPane.Mode,
                 RefreshSeconds = _intervalSeconds,
                 HighlightNewAndDead = _list.HighlightNewAndDead,
+                HighlightSeconds = _list.HighlightDuration.TotalSeconds,
+                ConfirmActions = _confirmActions,
+                ColorRules = ColorRuleSetting.FromRules(_colorRules),
                 AlwaysOnTop = Topmost,
                 NamePaneWidth = _tree.NamePaneWidth,
                 WindowWidth = Width,
@@ -425,6 +436,7 @@ public partial class MainWindow : Window
         Get<MenuItem>("MenuProperties").Click += (_, _) => ShowProperties();
         Get<MenuItem>("MenuSystemInfo").Click += (_, _) => ShowSystemInfo();
         Get<MenuItem>("MenuColumns").Click += (_, _) => _ = ChooseColumnsAsync();
+        Get<MenuItem>("MenuSettings").Click += (_, _) => _ = ShowSettingsAsync();
         Get<MenuItem>("MenuFind").Click += (_, _) => ShowFind();
 
         void WireSpeed(string name, double seconds) =>
@@ -902,6 +914,42 @@ public partial class MainWindow : Window
     }
 
     private void ShowAbout() => new AboutWindow().ShowDialog(this);
+
+    private async Task ShowSettingsAsync()
+    {
+        var window = new SettingsWindow(
+            _confirmActions,
+            _list.HighlightDuration.TotalSeconds,
+            _colorRules
+        );
+        await window.ShowDialog(this).ConfigureAwait(true);
+
+        if (window.Result is { } chosen)
+        {
+            ApplyOptions(chosen.ConfirmActions, chosen.HighlightSeconds, chosen.ColorRules);
+            Rebuild();
+            ScheduleSave();
+        }
+    }
+
+    /// <summary>Push the option values into everything that consumes them.</summary>
+    private void ApplyOptions(
+        bool confirmActions,
+        double highlightSeconds,
+        IReadOnlyList<ProcessColorRule> rules
+    )
+    {
+        _confirmActions = confirmActions;
+        _colorRules = rules;
+
+        var duration = TimeSpan.FromSeconds(highlightSeconds);
+        _list.HighlightDuration = duration;
+        _lowerPane.HighlightDuration = duration;
+
+        _tree.ColorRules = rules;
+        _lowerPane.ColorRules = rules;
+        _tree.InvalidateVisual();
+    }
 
     // ---- Helpers ------------------------------------------------------------
 

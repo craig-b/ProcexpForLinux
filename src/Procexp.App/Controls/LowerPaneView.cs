@@ -134,6 +134,18 @@ public sealed class LowerPaneView : UserControl
 
     public IReadOnlyList<ProcessColorRule> ColorRules { get; set; } = ProcessColorRule.Defaults;
 
+    /// <summary>How long the new and removed row tints linger.</summary>
+    public TimeSpan HighlightDuration
+    {
+        get => _moduleChanges.HighlightDuration;
+        set
+        {
+            _moduleChanges.HighlightDuration = value;
+            _handleChanges.HighlightDuration = value;
+            _threadChanges.HighlightDuration = value;
+        }
+    }
+
     public LowerPaneMode Mode
     {
         get => _mode;

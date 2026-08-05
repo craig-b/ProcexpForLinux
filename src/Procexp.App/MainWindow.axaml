@@ -25,6 +25,7 @@
                 />
                 <Separator />
                 <MenuItem Name="MenuColumns" Header="Select _Columns..." />
+                <MenuItem Name="MenuSettings" Header="_Options..." />
                 <Separator />
                 <MenuItem Name="MenuInstallHelper" Header="_Privileged Helper Status..." />
             </MenuItem>

@@ -13,6 +13,82 @@ public sealed record ColumnSet
     public required IReadOnlyList<Column> Columns { get; init; }
 }
 
+/// <summary>
+/// A colour-rule override, hex-encoded so the JSON stays hand-editable.
+/// Rules absent from the list keep their defaults.
+/// </summary>
+public sealed record ColorRuleSetting
+{
+    public required string Flag { get; init; }
+    public required bool Enabled { get; init; }
+    public required string Light { get; init; }
+    public required string Dark { get; init; }
+
+    /// <summary>Apply saved overrides on top of the default legend.</summary>
+    public static IReadOnlyList<ProcessColorRule> ToRules(
+        IReadOnlyList<ColorRuleSetting> overrides
+    ) =>
+        [
+            .. ProcessColorRule.Defaults.Select(rule =>
+            {
+                var saved = overrides.FirstOrDefault(o => o.Flag == rule.Flag.ToString());
+                if (saved is null)
+                {
+                    return rule;
+                }
+
+                return rule with
+                {
+                    IsEnabled = saved.Enabled,
+                    BackgroundLight = ParseHex(saved.Light) ?? rule.BackgroundLight,
+                    BackgroundDark = ParseHex(saved.Dark) ?? rule.BackgroundDark,
+                };
+            }),
+        ];
+
+    /// <summary>
+    /// The overrides worth saving: only rules that differ from the default,
+    /// so a pristine settings file stays free of colour noise.
+    /// </summary>
+    public static IReadOnlyList<ColorRuleSetting> FromRules(
+        IReadOnlyList<ProcessColorRule> rules
+    ) =>
+        [
+            .. rules
+                .Where(rule =>
+                    ProcessColorRule.Defaults.FirstOrDefault(d => d.Flag == rule.Flag) != rule
+                )
+                .Select(rule => new ColorRuleSetting
+                {
+                    Flag = rule.Flag.ToString(),
+                    Enabled = rule.IsEnabled,
+                    Light = FormatHex(rule.BackgroundLight),
+                    Dark = FormatHex(rule.BackgroundDark),
+                }),
+        ];
+
+    public static Rgba? ParseHex(string text)
+    {
+        var hex = text.TrimStart('#');
+        if (
+            hex.Length != 6
+            || !uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var value)
+        )
+        {
+            return null;
+        }
+
+        return Rgba.FromBytes(
+            (int)(value >> 16) & 0xFF,
+            (int)(value >> 8) & 0xFF,
+            (int)value & 0xFF
+        );
+    }
+
+    public static string FormatHex(Rgba c) =>
+        $"#{(int)Math.Round(c.R * 255):X2}{(int)Math.Round(c.G * 255):X2}{(int)Math.Round(c.B * 255):X2}";
+}
+
 /// <summary>Everything the app remembers between runs.</summary>
 public sealed record AppSettings
 {
@@ -31,6 +107,9 @@ public sealed record AppSettings
     public LowerPaneMode LowerPaneMode { get; init; } = LowerPaneMode.Modules;
     public double RefreshSeconds { get; init; } = 1.0;
     public bool HighlightNewAndDead { get; init; } = true;
+    public double HighlightSeconds { get; init; } = 1.0;
+    public bool ConfirmActions { get; init; } = true;
+    public IReadOnlyList<ColorRuleSetting> ColorRules { get; init; } = [];
     public bool AlwaysOnTop { get; init; }
     public double NamePaneWidth { get; init; } = 260;
 
@@ -142,6 +221,7 @@ public static class SettingsStore
                 ),
             ],
             RefreshSeconds = Math.Clamp(settings.RefreshSeconds, 0.25, 60),
+            HighlightSeconds = Math.Clamp(settings.HighlightSeconds, 0.5, 10),
             NamePaneWidth = Math.Clamp(settings.NamePaneWidth, 120, 900),
             WindowWidth = Math.Clamp(settings.WindowWidth, 640, 10000),
             WindowHeight = Math.Clamp(settings.WindowHeight, 480, 10000),

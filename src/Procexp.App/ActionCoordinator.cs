@@ -14,7 +14,7 @@ namespace Procexp.App;
 /// severity rules are enforced in one place rather than being re-derived at each
 /// call site. Refused actions never reach <see cref="ProcessActions"/> at all.
 /// </remarks>
-public sealed class ActionCoordinator(Window owner)
+public sealed class ActionCoordinator(Window owner, Func<bool> confirmActions)
 {
     // The helper seam: EPERM retries through the daemon when its socket exists.
     // Returning false when it does not keeps the original refusal — and its
@@ -110,6 +110,13 @@ public sealed class ActionCoordinator(Window owner)
 
     private async Task<bool> Confirm(ActionConfirmation confirmation)
     {
+        // The confirmation preference is the user's to switch off; refusals
+        // are not — a refused action must still explain why it will not run.
+        if (!confirmation.IsRefused && !confirmActions())
+        {
+            return true;
+        }
+
         var proceed = await ConfirmationDialog.ShowAsync(owner, confirmation).ConfigureAwait(true);
         return proceed && !confirmation.IsRefused;
     }

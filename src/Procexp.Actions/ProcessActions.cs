@@ -29,6 +29,20 @@ public static class Signals
 public sealed partial class ProcessActions
 {
     /// <summary>
+    /// Optional escalation for signals the kernel refuses with EPERM — the seam
+    /// the privileged helper plugs into, mirroring the macOS port. Returns false
+    /// when no escalation path exists, in which case the original refusal
+    /// stands; throws to report an attempted escalation that failed in its own
+    /// terms. A delegate rather than a dependency, so this project needs no
+    /// knowledge of the helper. The helper re-verifies process identity itself,
+    /// so the PID-reuse guard holds across the boundary.
+    /// </summary>
+    public Func<ProcessId, int, CancellationToken, Task<bool>>? PrivilegedSignal { get; init; }
+
+    /// <summary>As <see cref="PrivilegedSignal"/>, for renice.</summary>
+    public Func<ProcessId, int, CancellationToken, Task<bool>>? PrivilegedSetNice { get; init; }
+
+    /// <summary>
     /// Confirm that the PID still hosts the same process the caller selected.
     /// </summary>
     /// <remarks>
@@ -115,6 +129,115 @@ public sealed partial class ProcessActions
     public void Suspend(ProcessId id) => Signal(id, Signals.Stop);
 
     public void Resume(ProcessId id) => Signal(id, Signals.Cont);
+
+    /// <summary>
+    /// Send a signal, escalating through <see cref="PrivilegedSignal"/> when the
+    /// kernel refuses and an escalation path is wired.
+    /// </summary>
+    public async Task SignalAsync(
+        ProcessId id,
+        int signal,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            Signal(id, signal);
+        }
+        catch (ProviderException e)
+            when (e.Kind == ProviderErrorKind.NotPermitted && PrivilegedSignal is not null)
+        {
+            if (!await PrivilegedSignal(id, signal, cancellationToken).ConfigureAwait(false))
+            {
+                throw;
+            }
+        }
+    }
+
+    public Task KillAsync(
+        ProcessId id,
+        int signal = Signals.Term,
+        CancellationToken cancellationToken = default
+    ) => SignalAsync(id, signal, cancellationToken);
+
+    public Task SuspendAsync(ProcessId id, CancellationToken cancellationToken = default) =>
+        SignalAsync(id, Signals.Stop, cancellationToken);
+
+    public Task ResumeAsync(ProcessId id, CancellationToken cancellationToken = default) =>
+        SignalAsync(id, Signals.Cont, cancellationToken);
+
+    /// <summary>
+    /// <see cref="KillTree"/> with per-target escalation: in a mixed-ownership
+    /// tree, the targets the kernel permits are signalled directly and only the
+    /// refusals travel to the helper.
+    /// </summary>
+    public async Task KillTreeAsync(
+        ProcessId id,
+        ProcessSnapshot snapshot,
+        int signal = Signals.Term,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var ordered = new List<ProcessId>();
+        Collect(id);
+        ordered.Reverse();
+
+        ProviderException? firstFailure = null;
+        foreach (var target in ordered)
+        {
+            try
+            {
+                await SignalAsync(target, signal, cancellationToken).ConfigureAwait(false);
+            }
+            catch (ProviderException e) when (e.Kind == ProviderErrorKind.ProcessGone)
+            {
+                // Already dead, most likely as a result of its parent dying.
+            }
+            catch (ProviderException e)
+            {
+                firstFailure ??= e;
+            }
+        }
+
+        if (firstFailure is not null)
+        {
+            throw firstFailure;
+        }
+
+        void Collect(ProcessId node)
+        {
+            ordered.Add(node);
+            foreach (var child in snapshot.ChildIds(node))
+            {
+                Collect(child);
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="SetNice"/>, escalating through <see cref="PrivilegedSetNice"/>
+    /// when the kernel refuses — which includes raising priority on a process
+    /// the user owns, since that alone needs CAP_SYS_NICE.
+    /// </summary>
+    public async Task SetNiceAsync(
+        ProcessId id,
+        int nice,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            SetNice(id, nice);
+        }
+        catch (ProviderException e)
+            when (e.Kind == ProviderErrorKind.NotPermitted && PrivilegedSetNice is not null)
+        {
+            if (!await PrivilegedSetNice(id, nice, cancellationToken).ConfigureAwait(false))
+            {
+                throw;
+            }
+        }
+    }
 
     /// <summary>
     /// Kill a process and all its descendants.

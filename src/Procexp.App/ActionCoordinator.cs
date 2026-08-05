@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Procexp.Actions;
 using Procexp.App.Dialogs;
 using Procexp.Model;
+using Procexp.Privileged;
 
 namespace Procexp.App;
 
@@ -15,7 +16,36 @@ namespace Procexp.App;
 /// </remarks>
 public sealed class ActionCoordinator(Window owner)
 {
-    private readonly ProcessActions _actions = new();
+    // The helper seam: EPERM retries through the daemon when its socket exists.
+    // Returning false when it does not keeps the original refusal — and its
+    // "installing the privileged helper would allow this" explanation — intact.
+    private readonly ProcessActions _actions = new()
+    {
+        PrivilegedSignal = static async (id, signal, cancellationToken) =>
+        {
+            if (!PrivilegedClient.IsAvailable)
+            {
+                return false;
+            }
+
+            await new PrivilegedClient()
+                .SignalAsync(id, signal, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        },
+        PrivilegedSetNice = static async (id, nice, cancellationToken) =>
+        {
+            if (!PrivilegedClient.IsAvailable)
+            {
+                return false;
+            }
+
+            await new PrivilegedClient()
+                .SetNiceAsync(id, nice, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        },
+    };
 
     public async Task KillAsync(ProcessRecord process, bool tree, ProcessSnapshot snapshot)
     {
@@ -27,16 +57,9 @@ public sealed class ActionCoordinator(Window owner)
 
         await RunAsync(
             () =>
-            {
-                if (tree)
-                {
-                    _actions.KillTree(process.Id, snapshot);
-                }
-                else
-                {
-                    _actions.Kill(process.Id);
-                }
-            },
+                tree
+                    ? _actions.KillTreeAsync(process.Id, snapshot)
+                    : _actions.KillAsync(process.Id),
             tree ? "Kill Process Tree" : "Kill Process",
             process
         );
@@ -50,7 +73,7 @@ public sealed class ActionCoordinator(Window owner)
             return;
         }
 
-        await RunAsync(() => _actions.Suspend(process.Id), "Suspend Process", process);
+        await RunAsync(() => _actions.SuspendAsync(process.Id), "Suspend Process", process);
     }
 
     /// <summary>
@@ -58,10 +81,10 @@ public sealed class ActionCoordinator(Window owner)
     /// nothing to warn about.
     /// </summary>
     public Task ResumeAsync(ProcessRecord process) =>
-        RunAsync(() => _actions.Resume(process.Id), "Resume Process", process);
+        RunAsync(() => _actions.ResumeAsync(process.Id), "Resume Process", process);
 
     public Task SetNiceAsync(ProcessRecord process, int nice) =>
-        RunAsync(() => _actions.SetNice(process.Id, nice), "Set Priority", process);
+        RunAsync(() => _actions.SetNiceAsync(process.Id, nice), "Set Priority", process);
 
     public async Task RestartAsync(ProcessRecord process, ProcessSnapshot snapshot)
     {
@@ -71,7 +94,18 @@ public sealed class ActionCoordinator(Window owner)
             return;
         }
 
-        await RunAsync(() => _actions.Restart(process, snapshot), "Restart Process", process);
+        // Restart deliberately does not escalate: the replacement is launched as
+        // this user, so killing another user's process only to respawn it under
+        // the wrong identity would not be a restart at all.
+        await RunAsync(
+            () =>
+            {
+                _actions.Restart(process, snapshot);
+                return Task.CompletedTask;
+            },
+            "Restart Process",
+            process
+        );
     }
 
     private async Task<bool> Confirm(ActionConfirmation confirmation)
@@ -88,11 +122,11 @@ public sealed class ActionCoordinator(Window owner)
     /// exited while the dialog was open, or it belongs to another user — so they
     /// are reported in those terms rather than as errors.
     /// </remarks>
-    private async Task RunAsync(Action action, string title, ProcessRecord process)
+    private async Task RunAsync(Func<Task> action, string title, ProcessRecord process)
     {
         try
         {
-            action();
+            await action().ConfigureAwait(true);
         }
         catch (ProviderException e)
         {

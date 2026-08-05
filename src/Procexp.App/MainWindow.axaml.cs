@@ -20,14 +20,14 @@ namespace Procexp.App;
 
 public partial class MainWindow : Window
 {
-    private readonly ProcSampler _sampler = new();
-
     /// <summary>
-    /// What the detail views read through. Falls back to the privileged helper
-    /// for the ptrace-gated reads when one is installed, so the UI never has to
-    /// know whether a given process needed it.
+    /// What both the sweep and the detail views read through. Falls back to the
+    /// privileged helper for the ptrace-gated reads when one is installed, so
+    /// the UI never has to know whether a given process needed it — and the
+    /// sweep's I/O columns fill in for other users' processes too, from the
+    /// provider's helper-fed cache.
     /// </summary>
-    private readonly IProcessDataProvider _detail = PrivilegedClient.IsAvailable
+    private readonly IProcessDataProvider _sampler = PrivilegedClient.IsAvailable
         ? new HelperBackedProvider(new ProcSampler(), new PrivilegedClient())
         : new ProcSampler();
     private readonly ProcessListModel _list = new();
@@ -81,7 +81,7 @@ public partial class MainWindow : Window
 
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
-        _lowerPane = new LowerPaneView(_detail) { IsDarkMode = _tree.IsDarkMode };
+        _lowerPane = new LowerPaneView(_sampler) { IsDarkMode = _tree.IsDarkMode };
         Get<ContentControl>("LowerPaneHost").Content = _lowerPane;
 
         ApplySettings();
@@ -711,7 +711,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var window = new ProcessPropertiesWindow(_detail, process, _tree.IsDarkMode);
+        var window = new ProcessPropertiesWindow(_sampler, process, _tree.IsDarkMode);
         window.Show(this);
     }
 
@@ -758,7 +758,7 @@ public partial class MainWindow : Window
 
     private void ShowFind()
     {
-        var find = new FindHandleWindow(_detail, () => _list.Current, _tree.IsDarkMode);
+        var find = new FindHandleWindow(_sampler, () => _list.Current, _tree.IsDarkMode);
         find.Show(this);
     }
 

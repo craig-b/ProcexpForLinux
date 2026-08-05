@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Procexp.Model;
 
@@ -28,14 +29,177 @@ public sealed class HelperBackedProvider(IProcessDataProvider inner, PrivilegedC
         | ProviderCapabilities.ProcessIo
         | ProviderCapabilities.ProportionalMemory;
 
-    public IAsyncEnumerable<ProcessSnapshot> Snapshots(
+    public async IAsyncEnumerable<ProcessSnapshot> Snapshots(
         TimeSpan interval,
-        CancellationToken cancellationToken = default
-    ) => inner.Snapshots(interval, cancellationToken);
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        await foreach (
+            var snapshot in inner.Snapshots(interval, cancellationToken).ConfigureAwait(false)
+        )
+        {
+            yield return EnrichIo(snapshot);
+        }
+    }
 
-    public ValueTask<ProcessSnapshot> SnapshotAsync(
+    public async ValueTask<ProcessSnapshot> SnapshotAsync(
         CancellationToken cancellationToken = default
-    ) => inner.SnapshotAsync(cancellationToken);
+    ) => EnrichIo(await inner.SnapshotAsync(cancellationToken).ConfigureAwait(false));
+
+    // --- Sweep enrichment ---------------------------------------------------
+    //
+    // The sweep cannot read other users' /proc/PID/io, so those records arrive
+    // with null I/O counters and the LimitedInfo flag. The helper can read
+    // them, but the sweep visits hundreds of processes a second and a socket
+    // round trip per restricted process would put the daemon on the hot path.
+    // So sweeps only read this cache, and a single background wave refreshes
+    // stale entries between sweeps. The columns are cumulative bytes, so a
+    // value one refresh old is indistinguishable from a fresh one.
+
+    private static readonly TimeSpan RefreshAge = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan QuietAfterFailure = TimeSpan.FromSeconds(30);
+
+    private readonly Lock _ioGate = new();
+    private readonly Dictionary<ProcessId, CachedIo> _io = [];
+    private int _refreshing;
+    private DateTimeOffset _quietUntil = DateTimeOffset.MinValue;
+
+    private sealed record CachedIo(ulong? Read, ulong? Written, DateTimeOffset At);
+
+    private ProcessSnapshot EnrichIo(ProcessSnapshot snapshot)
+    {
+        List<ProcessId>? stale = null;
+        Dictionary<ProcessId, ProcessRecord>? patched = null;
+        var now = DateTimeOffset.UtcNow;
+
+        lock (_ioGate)
+        {
+            // Entries for exited processes are dropped here rather than aging
+            // out, so the cache always tracks the live process set.
+            List<ProcessId>? gone = null;
+            foreach (var id in _io.Keys)
+            {
+                if (!snapshot.Processes.ContainsKey(id))
+                {
+                    (gone ??= []).Add(id);
+                }
+            }
+
+            if (gone is not null)
+            {
+                foreach (var id in gone)
+                {
+                    _io.Remove(id);
+                }
+            }
+
+            var refreshDue = now >= _quietUntil;
+            foreach (var (id, record) in snapshot.Processes)
+            {
+                if (
+                    record.DiskBytesRead is not null
+                    || !record.Flags.HasFlag(ProcessFlags.LimitedInfo)
+                    || record.Flags.HasFlag(ProcessFlags.KernelThread)
+                )
+                {
+                    continue;
+                }
+
+                if (_io.TryGetValue(id, out var cached))
+                {
+                    if (cached.Read is not null || cached.Written is not null)
+                    {
+                        patched ??= new Dictionary<ProcessId, ProcessRecord>(snapshot.Processes);
+                        patched[id] = record with
+                        {
+                            DiskBytesRead = cached.Read,
+                            DiskBytesWritten = cached.Written,
+                        };
+                    }
+
+                    if (refreshDue && now - cached.At >= RefreshAge)
+                    {
+                        (stale ??= []).Add(id);
+                    }
+                }
+                else if (refreshDue)
+                {
+                    (stale ??= []).Add(id);
+                }
+            }
+        }
+
+        ScheduleRefresh(stale);
+
+        return patched is null
+            ? snapshot
+            : new ProcessSnapshot
+            {
+                Timestamp = snapshot.Timestamp,
+                Interval = snapshot.Interval,
+                Processes = patched,
+                Roots = snapshot.Roots,
+                Children = snapshot.Children,
+                System = snapshot.System,
+            };
+    }
+
+    private void ScheduleRefresh(List<ProcessId>? stale)
+    {
+        // One wave at a time: if the previous one is still draining, this
+        // sweep's stale list is simply picked up by a later sweep.
+        if (stale is null || Interlocked.Exchange(ref _refreshing, 1) != 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(() => RefreshAsync(stale));
+    }
+
+    private async Task RefreshAsync(List<ProcessId> stale)
+    {
+        try
+        {
+            // A few connections at a time — enough to drain a few hundred
+            // restricted processes well inside a sweep interval, without
+            // hammering the daemon.
+            const int Lanes = 4;
+            for (var i = 0; i < stale.Count; i += Lanes)
+            {
+                await Task.WhenAll(stale.Skip(i).Take(Lanes).Select(FetchIoAsync))
+                    .ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _refreshing, 0);
+        }
+    }
+
+    private async Task FetchIoAsync(ProcessId id)
+    {
+        try
+        {
+            var io = await client.ReadIoAsync(id).ConfigureAwait(false);
+            lock (_ioGate)
+            {
+                _io[id] = new CachedIo(io?.Read, io?.Written, DateTimeOffset.UtcNow);
+            }
+        }
+        catch (ProviderException e)
+        {
+            lock (_ioGate)
+            {
+                _io[id] = new CachedIo(null, null, DateTimeOffset.UtcNow);
+                if (e.Kind == ProviderErrorKind.HelperUnavailable)
+                {
+                    // Socket gone or refused: stop asking for a while rather
+                    // than failing once per restricted process per wave.
+                    _quietUntil = DateTimeOffset.UtcNow + QuietAfterFailure;
+                }
+            }
+        }
+    }
 
     // Threads, command lines and working directories are readable cross-user, so
     // they never need the helper.

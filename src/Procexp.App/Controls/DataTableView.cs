@@ -171,8 +171,7 @@ public sealed class DataTableView<T> : VirtualTableBase
         sorted.Sort(
             (a, b) =>
             {
-                var result = column.SortValue(a).CompareTo(column.SortValue(b));
-                return _sortDescending ? -result : result;
+                return column.SortValue(a).CompareTo(column.SortValue(b), _sortDescending);
             }
         );
 

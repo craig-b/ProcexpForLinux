@@ -156,13 +156,15 @@ public static class RowFlattener
         processes.Sort(
             (a, b) =>
             {
-                var result = Columns.SortValue(column, a).CompareTo(Columns.SortValue(column, b));
+                var result = Columns
+                    .SortValue(column, a)
+                    .CompareTo(Columns.SortValue(column, b), descending);
                 if (result == 0)
                 {
                     return a.Id.Pid.CompareTo(b.Id.Pid);
                 }
 
-                return descending ? -result : result;
+                return result;
             }
         );
     }

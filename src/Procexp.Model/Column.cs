@@ -36,6 +36,17 @@ public readonly struct SortKey : IComparable<SortKey>
 
     public static SortKey Text(string value) => new(Kind.Text, 0, value);
 
+    /// <summary>
+    /// Compare with a sort direction: real values flip under
+    /// <paramref name="descending"/>, while <see cref="None"/> stays last
+    /// either way.
+    /// </summary>
+    public int CompareTo(SortKey other, bool descending)
+    {
+        var result = CompareTo(other);
+        return descending && _kind != Kind.None && other._kind != Kind.None ? -result : result;
+    }
+
     public int CompareTo(SortKey other)
     {
         if (_kind == Kind.None)

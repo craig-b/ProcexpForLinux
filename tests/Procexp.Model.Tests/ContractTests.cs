@@ -199,6 +199,20 @@ public class ContractTests
         Assert.Equal(0, SortKey.None.CompareTo(SortKey.None));
     }
 
+    [Fact]
+    public void SortKey_NoneSortsLastRegardlessOfDirection()
+    {
+        Assert.True(SortKey.None.CompareTo(SortKey.Number(0), descending: true) > 0);
+        Assert.True(SortKey.Number(0).CompareTo(SortKey.None, descending: true) < 0);
+        Assert.True(SortKey.None.CompareTo(SortKey.Text("zzz"), descending: true) > 0);
+        Assert.Equal(0, SortKey.None.CompareTo(SortKey.None, descending: true));
+
+        // Real values still flip with the direction.
+        Assert.True(SortKey.Number(1).CompareTo(SortKey.Number(2), descending: true) > 0);
+        Assert.True(SortKey.Number(1).CompareTo(SortKey.Number(2), descending: false) < 0);
+        Assert.True(SortKey.Text("a").CompareTo(SortKey.Text("b"), descending: true) > 0);
+    }
+
     /// <summary>
     /// GPU is unsupported on macOS but available here through DRM fdinfo.
     /// Network is not: Linux has no per-process byte counter, so the column stays

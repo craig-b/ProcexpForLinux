@@ -196,6 +196,15 @@ Console.WriteLine("\nDetail providers");
 
 var selfId = self?.Id ?? new ProcessId(Environment.ProcessId, 0);
 
+// A fresh process may not yet have accrued a single clock tick on any thread,
+// which reads as CpuTime 0 — indistinguishable from a stub. Spin briefly so
+// the main thread provably owns some CPU before asserting that it is measured.
+var spin = Stopwatch.StartNew();
+while (spin.ElapsedMilliseconds < 50)
+{
+    // burn
+}
+
 var threads = await sampler.ThreadsAsync(selfId);
 Check("threads enumerate", threads.Count > 0, $"{threads.Count} threads");
 Check(

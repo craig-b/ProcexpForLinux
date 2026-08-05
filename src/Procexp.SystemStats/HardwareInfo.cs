@@ -133,6 +133,8 @@ public sealed record HardwareInfo
         var physicalCores = new HashSet<(string Socket, string Core)>();
         var sockets = new HashSet<string>();
         var currentSocket = "";
+        string? armImplementer = null;
+        string? armPart = null;
 
         try
         {
@@ -181,11 +183,30 @@ public sealed record HardwareInfo
                 {
                     model = value;
                 }
+                // Server-class ARM has neither: only implementer and part codes,
+                // and "Features" where x86 says "flags".
+                else if (key.SequenceEqual("CPU implementer") && armImplementer is null)
+                {
+                    armImplementer = value;
+                }
+                else if (key.SequenceEqual("CPU part") && armPart is null)
+                {
+                    armPart = value;
+                }
+                else if (key.SequenceEqual("Features") && flags.Count == 0)
+                {
+                    flags = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                }
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // Fall through with whatever was gathered.
+        }
+
+        if (model.Length == 0 && armPart is not null)
+        {
+            model = DecodeArmCore(armImplementer, armPart);
         }
 
         return new CpuFacts(
@@ -196,6 +217,66 @@ public sealed record HardwareInfo
             mhz,
             flags
         );
+    }
+
+    /// <summary>
+    /// Turn ARM's implementer and part codes into a name, the way lscpu does
+    /// from the same (much longer) table. Unknown codes degrade to the raw
+    /// hex rather than to "Unknown CPU", since the codes still identify the
+    /// machine to anyone who can look them up.
+    /// </summary>
+    private static string DecodeArmCore(string? implementer, string part)
+    {
+        var maker = implementer switch
+        {
+            "0x41" => "ARM",
+            "0x42" => "Broadcom",
+            "0x43" => "Cavium",
+            "0x46" => "Fujitsu",
+            "0x48" => "HiSilicon",
+            "0x4e" => "NVIDIA",
+            "0x51" => "Qualcomm",
+            "0x53" => "Samsung",
+            "0x61" => "Apple",
+            "0xc0" => "Ampere",
+            _ => null,
+        };
+
+        var core = (maker, part) switch
+        {
+            ("ARM", "0xd03") => "Cortex-A53",
+            ("ARM", "0xd04") => "Cortex-A35",
+            ("ARM", "0xd05") => "Cortex-A55",
+            ("ARM", "0xd07") => "Cortex-A57",
+            ("ARM", "0xd08") => "Cortex-A72",
+            ("ARM", "0xd09") => "Cortex-A73",
+            ("ARM", "0xd0a") => "Cortex-A75",
+            ("ARM", "0xd0b") => "Cortex-A76",
+            ("ARM", "0xd0c") => "Neoverse-N1",
+            ("ARM", "0xd0d") => "Cortex-A77",
+            ("ARM", "0xd40") => "Neoverse-V1",
+            ("ARM", "0xd41") => "Cortex-A78",
+            ("ARM", "0xd44") => "Cortex-X1",
+            ("ARM", "0xd46") => "Cortex-A510",
+            ("ARM", "0xd47") => "Cortex-A710",
+            ("ARM", "0xd48") => "Cortex-X2",
+            ("ARM", "0xd49") => "Neoverse-N2",
+            ("ARM", "0xd4a") => "Neoverse-E1",
+            ("ARM", "0xd4d") => "Cortex-A715",
+            ("ARM", "0xd4e") => "Cortex-X3",
+            ("ARM", "0xd4f") => "Neoverse-V2",
+            ("ARM", "0xd84") => "Neoverse-V3",
+            ("ARM", "0xd8e") => "Neoverse-N3",
+            ("Ampere", "0xac3") => "AmpereOne",
+            _ => null,
+        };
+
+        return (maker, core) switch
+        {
+            (not null, not null) => $"{maker} {core}",
+            (not null, null) => $"{maker} part {part}",
+            _ => $"ARM implementer {implementer ?? "?"} part {part}",
+        };
     }
 
     private static double? ReadMaxFrequencyMhz()

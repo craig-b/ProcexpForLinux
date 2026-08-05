@@ -119,6 +119,10 @@ exactly that. It will offer to activate the helper — interactively, or with `-
 `--without-helper` / `--add-user NAME` when scripted — but never activates it silently, for the
 reasons below.
 
+Upgrades do not re-ask answered questions: an enabled helper is kept (and restarted, so the running
+daemon matches the installed binary), a helper left deactivated on a previous install stays that
+way, and a user already in the `procexp` group is not prompted about joining it.
+
 ## What ships where
 
 | Path                                                 | Contents                                      |

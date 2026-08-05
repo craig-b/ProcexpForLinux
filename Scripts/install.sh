@@ -151,6 +151,11 @@ fi
 
 # --- Install the files ------------------------------------------------------
 
+# A pre-existing manifest means this is an upgrade, where the helper questions
+# were already answered once and should not be asked again.
+UPGRADE=no
+[[ -f "${MANIFEST}" ]] && UPGRADE=yes
+
 if [[ -n "${TARBALL}" ]]; then
   [[ -f "${TARBALL}" ]] || {
     echo "No such file: ${TARBALL}" >&2
@@ -208,6 +213,20 @@ if ! have systemctl; then
 fi
 
 if [[ "${HELPER}" == ask ]]; then
+  # An upgrade is not a new decision. Enabled means the administrator said
+  # yes once — keep it (the new binary is already running via the restart
+  # above). Installed-but-not-enabled on an upgrade was a no; stay quiet.
+  if systemctl is-enabled --quiet procexp-helper 2> /dev/null; then
+    HELPER=yes
+  elif [[ "${UPGRADE}" == yes ]]; then
+    echo
+    echo "Helper remains deactivated, as before. To activate:"
+    echo "  sudo bash /usr/share/procexp/install.sh --enable-helper"
+    exit 0
+  fi
+fi
+
+if [[ "${HELPER}" == ask ]]; then
   if [[ -n "${PROMPT_IN}" ]]; then
     echo
     echo "The privileged helper fills in the columns and views that /proc"
@@ -246,14 +265,24 @@ systemctl --no-pager --lines 0 status procexp-helper | head -3 || true
 
 # Enabling the service grants nothing by itself — the socket is root:procexp
 # 0660 — so group membership is the actual privilege grant, prompted separately.
-if [[ -z "${ADD_USER}" && -n "${PROMPT_IN}" && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]]; then
+# Already-granted membership is not asked about again: `id -nG USER` reads the
+# group database (including a procexp primary group), not the session.
+ALREADY_MEMBER=no
+if [[ -n "${SUDO_USER:-}" ]] \
+  && id -nG "${SUDO_USER}" 2> /dev/null | tr ' ' '\n' | grep -qx procexp; then
+  ALREADY_MEMBER=yes
+fi
+
+if [[ -z "${ADD_USER}" && "${ALREADY_MEMBER}" == no && -n "${PROMPT_IN}" && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]]; then
   echo
   read -r -p "Add ${SUDO_USER} to the procexp group (sudo-equivalent grant)? [y/N] " reply \
     < "${PROMPT_IN}"
   [[ "${reply}" =~ ^[Yy] ]] && ADD_USER="${SUDO_USER}"
 fi
 
-if [[ -n "${ADD_USER}" ]]; then
+if [[ "${ALREADY_MEMBER}" == yes && -z "${ADD_USER}" ]]; then
+  echo "${SUDO_USER} is already in the procexp group."
+elif [[ -n "${ADD_USER}" ]]; then
   usermod -aG procexp "${ADD_USER}"
   echo "Added ${ADD_USER} to procexp. Log out and back in for it to take effect."
 else

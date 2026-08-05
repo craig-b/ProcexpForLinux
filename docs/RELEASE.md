@@ -92,10 +92,22 @@ arm64 hardware. CI does the latter.
 ## Install
 
 ```sh
+# From the latest GitHub release — detects arch and libc, verifies checksums:
+curl -fsSL https://raw.githubusercontent.com/craig-b/ProcexpForLinux/main/Scripts/get.sh | sh
+
+# From a checkout:
 sudo ./Scripts/install.sh                # from a local build's artifacts/stage
 sudo ./Scripts/install.sh --tarball FILE # from a release tarball
 sudo ./Scripts/install.sh --uninstall
 ```
+
+`Scripts/get.sh` is POSIX sh, because a pipe runs under sh rather than bash. It resolves the latest
+release (pin with `PROCEXP_VERSION=v0.1.0`), downloads the matching tarball, checks it against
+`SHA256SUMS`, and hands off to the installer — preferring the copy shipped inside the tarball, so
+the installer version always matches the artifact. Prompts still work under a pipe: the installer
+reads from `/dev/tty` when stdin is not a terminal. The tarball ships the installer at
+`/usr/share/procexp/install.sh`, so an installed system can uninstall or activate the helper later
+without the repository.
 
 A script rather than a package because the binaries are self-contained: there is no runtime to
 resolve and no dependency graph to walk, so installation is copying the staged tree into place. On

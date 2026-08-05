@@ -41,7 +41,17 @@ FALLBACK_FILES=(
   /usr/lib/systemd/system/procexp-helper.service
   /usr/share/applications/procexp.desktop
   /usr/share/icons/hicolor/scalable/apps/procexp.svg
+  /usr/share/procexp/install.sh
 )
+
+# Under `curl | sh` stdin is the pipe, but the controlling terminal can still
+# answer questions — so prompts read from /dev/tty when stdin is not one.
+PROMPT_IN=""
+if [[ -t 0 ]]; then
+  PROMPT_IN=/dev/stdin
+elif { : < /dev/tty; } 2> /dev/null; then
+  PROMPT_IN=/dev/tty
+fi
 
 TARBALL=""
 UNINSTALL=no
@@ -183,7 +193,7 @@ echo "Installed procexp, procexp-smoke and the helper files."
 
 # Replacing the file does not replace the process: a running helper keeps its
 # old binary mapped, so restart it to make what runs match what is installed.
-if have systemctl && systemctl is-active --quiet procexp-helper; then
+if have systemctl && systemctl is-active --quiet procexp-helper 2> /dev/null; then
   systemctl restart procexp-helper
   echo "Restarted the running helper so it picks up the new binary."
 fi
@@ -198,7 +208,7 @@ if ! have systemctl; then
 fi
 
 if [[ "${HELPER}" == ask ]]; then
-  if [[ -t 0 ]]; then
+  if [[ -n "${PROMPT_IN}" ]]; then
     echo
     echo "The privileged helper fills in the columns and views that /proc"
     echo "restricts to root: other users' I/O, memory detail, environment,"
@@ -208,13 +218,13 @@ if [[ "${HELPER}" == ask ]]; then
     echo "a member can read the environment of any process on the machine,"
     echo "which routinely holds tokens and passwords. See docs/HELPER.md."
     echo
-    read -r -p "Enable the helper service? [y/N] " reply
+    read -r -p "Enable the helper service? [y/N] " reply < "${PROMPT_IN}"
     [[ "${reply}" =~ ^[Yy] ]] && HELPER=yes || HELPER=no
   else
     # Non-interactive with no flag: the safe default is off, loudly.
     echo
     echo "Helper not activated (non-interactive, no --enable-helper given)."
-    echo "To activate later: sudo ./Scripts/install.sh --enable-helper"
+    echo "To activate later: sudo bash /usr/share/procexp/install.sh --enable-helper"
     exit 0
   fi
 fi
@@ -222,7 +232,7 @@ fi
 if [[ "${HELPER}" == no ]]; then
   echo
   echo "Helper installed but not activated. To activate later:"
-  echo "  sudo ./Scripts/install.sh --enable-helper"
+  echo "  sudo bash /usr/share/procexp/install.sh --enable-helper"
   exit 0
 fi
 
@@ -236,9 +246,10 @@ systemctl --no-pager --lines 0 status procexp-helper | head -3 || true
 
 # Enabling the service grants nothing by itself — the socket is root:procexp
 # 0660 — so group membership is the actual privilege grant, prompted separately.
-if [[ -z "${ADD_USER}" && -t 0 && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]]; then
+if [[ -z "${ADD_USER}" && -n "${PROMPT_IN}" && -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]]; then
   echo
-  read -r -p "Add ${SUDO_USER} to the procexp group (sudo-equivalent grant)? [y/N] " reply
+  read -r -p "Add ${SUDO_USER} to the procexp group (sudo-equivalent grant)? [y/N] " reply \
+    < "${PROMPT_IN}"
   [[ "${reply}" =~ ^[Yy] ]] && ADD_USER="${SUDO_USER}"
 fi
 

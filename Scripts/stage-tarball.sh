@@ -38,6 +38,11 @@ install -Dm755 "${BINDIR}/procexp-smoke/procexp-smoke" "${STAGE}/usr/bin/procexp
 # offering it as a command invites someone to run it expecting a UI.
 install -Dm755 "${BINDIR}/procexp-helper/procexp-helper" "${STAGE}/usr/lib/procexp/procexp-helper"
 
+# The installer travels with the tree, so an installed system can uninstall
+# or activate the helper later without the repository, and the curl-pipe
+# bootstrap (Scripts/get.sh) runs the installer that matches the tarball.
+install -Dm755 "${ROOT}/Scripts/install.sh" "${STAGE}/usr/share/procexp/install.sh"
+
 install -Dm644 "${ROOT}/packaging/procexp.desktop" "${STAGE}/usr/share/applications/procexp.desktop"
 install -Dm644 "${ROOT}/packaging/procexp.svg" "${STAGE}/usr/share/icons/hicolor/scalable/apps/procexp.svg"
 install -Dm644 "${ROOT}/packaging/procexp-helper.service" "${STAGE}/usr/lib/systemd/system/procexp-helper.service"

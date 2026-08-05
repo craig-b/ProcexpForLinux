@@ -13,7 +13,13 @@ namespace Procexp.App.Dialogs;
 /// <remarks>
 /// The command runs through <c>sh -c</c>, so quoting, globbing, $HOME and
 /// pipelines behave the way the user expects from a terminal, rather than
-/// inventing a private argument-splitting dialect.
+/// inventing a private argument-splitting dialect. That is the feature, not a
+/// hole: the text is typed by the user, into their own session, and runs with
+/// exactly the privileges they already have — this dialog grants nothing a
+/// terminal would not.
+///
+/// The care is needed where text the user did <em>not</em> author reaches that
+/// shell, which here is only the Browse path — see <see cref="ShellQuote"/>.
 /// </remarks>
 public sealed class RunDialog : Window
 {
@@ -95,11 +101,25 @@ public sealed class RunDialog : Window
 
         if (files.Count > 0 && files[0].Path is { IsAbsoluteUri: true, Scheme: "file" } uri)
         {
-            // Quoted so a path with spaces survives the shell.
-            _command.Text = $"\"{uri.LocalPath}\"";
+            _command.Text = ShellQuote(uri.LocalPath);
             _command.CaretIndex = _command.Text.Length;
         }
     }
+
+    /// <summary>
+    /// Wrap a path so the shell sees exactly these bytes.
+    /// </summary>
+    /// <remarks>
+    /// Single quotes rather than double: inside double quotes the shell still
+    /// expands <c>$(…)</c>, backticks and <c>$VAR</c>, so a file named
+    /// <c>$(rm -rf ~).sh</c> — a name the user did not choose, and one an
+    /// attacker can plant in a download directory — would execute on Browse
+    /// rather than merely being named. Inside single quotes nothing expands;
+    /// the only character needing care is the single quote itself, closed and
+    /// re-opened around an escaped one in the usual POSIX idiom.
+    /// </remarks>
+    internal static string ShellQuote(string path) =>
+        "'" + path.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 
     private void Launch()
     {

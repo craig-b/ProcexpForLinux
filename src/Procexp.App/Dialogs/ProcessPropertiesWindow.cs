@@ -7,6 +7,7 @@ using Procexp.App.Controls;
 using Procexp.Model;
 using Procexp.Net;
 using Procexp.Provenance;
+using Procexp.Sampling;
 using SortKey = Procexp.Model.SortKey;
 
 namespace Procexp.App.Dialogs;
@@ -31,6 +32,7 @@ public sealed class ProcessPropertiesWindow : Window
     private readonly DetailList _image = new();
     private readonly DetailList _performance = new();
     private readonly DetailList _provenanceDetail = new();
+    private readonly DetailList _security = new();
     private readonly DataTableView<ThreadInfo> _threads = new();
     private readonly DataTableView<SocketInfo> _sockets = new();
     private readonly DataTableView<EnvironmentEntry> _environment = new();
@@ -95,6 +97,7 @@ public sealed class ProcessPropertiesWindow : Window
 
         PopulateImage();
         PopulatePerformance();
+        PopulateSecurity();
 
         Opened += (_, _) => _ = RunRefreshLoopAsync();
         Closed += (_, _) => _lifetime.Cancel();
@@ -135,6 +138,7 @@ public sealed class ProcessPropertiesWindow : Window
                 new TabItem { Header = "Threads", Content = _threads },
                 new TabItem { Header = "TCP/IP", Content = _sockets },
                 new TabItem { Header = "Provenance", Content = _provenanceDetail },
+                new TabItem { Header = "Security", Content = _security },
                 new TabItem { Header = "Environment", Content = _environment },
                 new TabItem { Header = "Strings", Content = BuildStringsPanel() },
             },
@@ -320,6 +324,93 @@ public sealed class ProcessPropertiesWindow : Window
     }
 
     // ---- Population ---------------------------------------------------------
+
+    /// <summary>
+    /// The kernel's live view of what this process may do — the Linux answer
+    /// to the macOS Security tab, and a good deal more concrete: entitlements
+    /// are a bundle's static claim, these are the capabilities the process
+    /// actually holds at this instant.
+    /// </summary>
+    private void PopulateSecurity()
+    {
+        var info = ProcSecurity.Read(_id.Pid);
+
+        _security.Clear();
+
+        _security.AddSection("Identity");
+        _security.Add("User", Describe(_record.UserName, _record.Uid));
+
+        if (info.Uids is { } uids)
+        {
+            _security.Add("Real / effective uid", $"{uids.Real} / {uids.Effective}");
+            _security.Add("Saved / filesystem uid", $"{uids.Saved} / {uids.FileSystem}");
+
+            // Differing real and effective uid is how a setuid program looks,
+            // and is worth seeing rather than deriving.
+            if (uids.Real != uids.Effective)
+            {
+                _security.Add("Note", "runs with a different effective user (setuid)");
+            }
+        }
+
+        if (info.Gids is { } gids)
+        {
+            _security.Add("Real / effective gid", $"{gids.Real} / {gids.Effective}");
+            _security.Add("Saved / filesystem gid", $"{gids.Saved} / {gids.FileSystem}");
+        }
+
+        if (info.Groups.Count > 0)
+        {
+            _security.Add("Supplementary groups", string.Join(", ", info.Groups));
+        }
+
+        _security.AddSection("Capabilities");
+        AddCapabilities("Effective", info.CapabilitiesEffective, info.CapabilitiesBounding);
+        AddCapabilities("Permitted", info.CapabilitiesPermitted, info.CapabilitiesBounding);
+        AddCapabilities("Inheritable", info.CapabilitiesInheritable, info.CapabilitiesBounding);
+        AddCapabilities("Ambient", info.CapabilitiesAmbient, info.CapabilitiesBounding);
+        AddCapabilities("Bounding set", info.CapabilitiesBounding, info.CapabilitiesBounding);
+
+        _security.AddSection("Confinement");
+        _security.Add(
+            "No new privileges",
+            info.NoNewPrivileges is { } nnp ? (nnp ? "yes" : "no") : null
+        );
+        _security.Add(
+            "Seccomp",
+            ProcSecurity.DescribeSeccomp(info.SeccompMode, info.SeccompFilters)
+        );
+        _security.Add("Security label", _record.SecurityLabel, showWhenEmpty: true);
+        _security.Add("Sandbox", _record.Flags.HasFlag(ProcessFlags.Sandboxed) ? "yes" : "no");
+
+        void AddCapabilities(string label, ulong? mask, ulong? bounding)
+        {
+            if (mask is not { } value)
+            {
+                _security.Add(label, null);
+                return;
+            }
+
+            if (value == 0)
+            {
+                _security.Add(label, "none");
+                return;
+            }
+
+            // Listing all forty names for a root process is noise; saying it
+            // holds everything is the useful statement.
+            if (bounding is { } b && ProcSecurity.IsFullSet(value, b))
+            {
+                _security.Add(label, "all capabilities");
+                return;
+            }
+
+            _security.Add(label, string.Join(", ", ProcSecurity.DescribeCapabilities(value)));
+        }
+
+        static string Describe(string? name, uint id) =>
+            name is null ? id.ToString(CultureInfo.InvariantCulture) : $"{name} ({id})";
+    }
 
     private void PopulateImage()
     {

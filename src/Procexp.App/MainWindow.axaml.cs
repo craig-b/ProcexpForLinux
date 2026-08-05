@@ -45,6 +45,8 @@ public partial class MainWindow : Window
     private SystemInfoWindow? _systemInfo;
 
     private readonly SystemStatsProvider _systemStats = new();
+    private readonly SystemHistory _systemHistory = new();
+    private bool _statsPrimed;
     private readonly GpuProvider _gpu = new();
 
     /// <summary>
@@ -607,7 +609,19 @@ public partial class MainWindow : Window
 
         _systemInfo?.SetProcessCounts(snapshot.Processes.Count, snapshot.System.ThreadCount);
 
-        var system = snapshot.System;
+        // The sampler only fills counts; the system-wide rates come from the
+        // stats provider, read once per sweep and shared by the toolbar
+        // sparklines, the history, and the System Information window.
+        var system = _systemStats.Read();
+
+        if (!_statsPrimed)
+        {
+            // The first read only primes the deltas — plotting it would draw a
+            // zero that never happened.
+            _statsPrimed = true;
+            return;
+        }
+
         var memoryPercent =
             system.MemoryTotal > 0 ? system.MemoryUsed * 100.0 / system.MemoryTotal : 0;
 
@@ -619,27 +633,31 @@ public partial class MainWindow : Window
         _memoryValue.Text = $"{memoryPercent:F0}%";
 
         // Bytes(0) formats as "", which would leave a dangling "/s".
-        var ioRate = (ulong)Math.Max(0, system.DiskBytesPerSec);
+        var ioRate = system.DiskBytesPerSec;
         _ioValue.Text = ioRate > 0 ? $"{ValueFormat.Bytes(ioRate)}/s" : "0 B/s";
 
-        // Who was busiest this second, for the System Information graphs'
-        // hover readout. Computed only while that window is open.
-        if (_systemInfo is { } info)
-        {
-            var byCpu = snapshot
-                .Processes.Values.OrderByDescending(p => p.CpuPercent)
-                .FirstOrDefault();
-            var byMemory = snapshot
-                .Processes.Values.OrderByDescending(p => p.ResidentSize)
-                .FirstOrDefault();
+        // Who was busiest this second, for the CPU and memory graphs' hover
+        // readout. CpuPercent is Irix-style — 100 per core — so it is scaled
+        // to the whole machine here to match the 0–100 graphs it annotates.
+        var byCpu = snapshot.Processes.Values.OrderByDescending(p => p.CpuPercent).FirstOrDefault();
+        var byMemory = snapshot
+            .Processes.Values.OrderByDescending(p => p.ResidentSize)
+            .FirstOrDefault();
+        var topCpuPercent = byCpu is null
+            ? 0
+            : byCpu.CpuPercent / Math.Max(1, Environment.ProcessorCount);
 
-            info.RecordTopConsumers(
-                byCpu is { CpuPercent: > 0.5 } ? $"{byCpu.Name} — {byCpu.CpuPercent:F0}%" : null,
+        _systemHistory.Record(
+            new SystemHistory.Entry(
+                system,
+                byCpu is not null && topCpuPercent >= 0.5
+                    ? $"{byCpu.Name} — {topCpuPercent:F0}%"
+                    : null,
                 byMemory is not null
                     ? $"{byMemory.Name} — {ValueFormat.Bytes(byMemory.ResidentSize)}"
                     : null
-            );
-        }
+            )
+        );
     }
 
     /// <summary>
@@ -757,9 +775,8 @@ public partial class MainWindow : Window
     /// Open the System Information window, or bring the existing one forward.
     /// </summary>
     /// <remarks>
-    /// Single-instance, unlike Properties. Two copies would each run their own
-    /// one-second stats loop and disagree on every delta, since the counters are
-    /// consumed rather than sampled.
+    /// Single-instance, unlike Properties: it is a view over the one shared
+    /// history the sweep records, so a second copy would show the same thing.
     /// </remarks>
     private void ShowSystemInfo()
     {
@@ -769,7 +786,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        _systemInfo = new SystemInfoWindow(_systemStats, _gpu, _tree.IsDarkMode);
+        _systemInfo = new SystemInfoWindow(
+            _systemHistory,
+            _gpu,
+            _tree.IsDarkMode,
+            _sweep.IntervalSeconds
+        );
         _systemInfo.SetProcessCounts(
             _list.Current.Processes.Count,
             _list.Current.System.ThreadCount

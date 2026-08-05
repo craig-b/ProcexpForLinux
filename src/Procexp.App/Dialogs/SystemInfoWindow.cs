@@ -23,11 +23,12 @@ public sealed class SystemInfoWindow : Window
 {
     private const int HistorySeconds = 120;
 
-    private readonly SystemStatsProvider _stats;
+    private readonly SystemHistory _history;
     private readonly GpuProvider _gpu;
     private readonly HardwareInfo _hardware = HardwareInfo.Gather();
     private readonly CancellationTokenSource _lifetime = new();
     private readonly bool _darkMode;
+    private readonly double _secondsPerSample;
 
     private readonly HistoryGraphView _summaryCpu;
     private readonly HistoryGraphView _summaryMemory;
@@ -71,11 +72,17 @@ public sealed class SystemInfoWindow : Window
     private int _processCount;
     private int _threadCount;
 
-    public SystemInfoWindow(SystemStatsProvider stats, GpuProvider gpu, bool darkMode)
+    public SystemInfoWindow(
+        SystemHistory history,
+        GpuProvider gpu,
+        bool darkMode,
+        double secondsPerSample
+    )
     {
-        _stats = stats;
+        _history = history;
         _gpu = gpu;
         _darkMode = darkMode;
+        _secondsPerSample = secondsPerSample;
 
         Title = "System Information";
         Width = 900;
@@ -103,8 +110,28 @@ public sealed class SystemInfoWindow : Window
         BuildLayout();
         PopulateHardware();
 
-        Opened += (_, _) => _ = RunAsync();
-        Closed += (_, _) => _lifetime.Cancel();
+        // The sweep has been recording since startup, so the graphs open
+        // already carrying up to Capacity seconds of history.
+        foreach (var entry in history.Entries)
+        {
+            Append(entry);
+        }
+
+        if (history.Entries.Count > 0)
+        {
+            PopulateNumbers(history.Entries[^1].Stats);
+        }
+
+        history.Recorded += OnRecorded;
+
+        // Only the GPU needs a private poll: its sampling is too costly to run
+        // in the background for a window that may never open.
+        Opened += (_, _) => _ = RunGpuAsync();
+        Closed += (_, _) =>
+        {
+            _history.Recorded -= OnRecorded;
+            _lifetime.Cancel();
+        };
     }
 
     /// <summary>Counts owned by the sampling engine rather than the stats provider.</summary>
@@ -115,24 +142,19 @@ public sealed class SystemInfoWindow : Window
     }
 
     /// <summary>
-    /// Remember who was busiest at this instant, so hovering a sample can say
-    /// what caused the spike — the readout the macOS graphs have.
+    /// Who was busiest at each recorded instant, so hovering a sample can say
+    /// what caused the spike — the readout the macOS graphs have. Fed from the
+    /// history entries alongside the samples they describe.
     /// </summary>
-    public void RecordTopConsumers(string? cpu, string? memory)
+    private static void Push(List<string?> history, string? entry)
     {
-        Push(_topCpu, cpu);
-        Push(_topMemory, memory);
+        history.Add(entry);
 
-        static void Push(List<string?> history, string? entry)
+        // One more than any graph's capacity: the oldest visible sample must
+        // still have its label.
+        while (history.Count > SystemHistory.Capacity)
         {
-            history.Add(entry);
-
-            // One more than any graph's capacity: the oldest visible sample
-            // must still have its label.
-            while (history.Count > 200)
-            {
-                history.RemoveAt(0);
-            }
+            history.RemoveAt(0);
         }
     }
 
@@ -154,6 +176,7 @@ public sealed class SystemInfoWindow : Window
             IsDarkMode = _darkMode,
             Capacity = HistorySeconds,
             Height = 110,
+            SecondsPerSample = _secondsPerSample,
         };
 
         if (percent)
@@ -293,6 +316,7 @@ public sealed class SystemInfoWindow : Window
                 Height = 64,
                 Margin = new Thickness(3),
                 FormatValue = v => string.Create(CultureInfo.InvariantCulture, $"{v:F0}%"),
+                SecondsPerSample = _secondsPerSample,
             };
 
             graph.AddSeries(Color.FromRgb(90, 200, 90));
@@ -336,19 +360,15 @@ public sealed class SystemInfoWindow : Window
 
     // ---- Refresh ------------------------------------------------------------
 
-    private async Task RunAsync()
+    private async Task RunGpuAsync()
     {
-        // The first stats read only primes the deltas, so discard it rather than
-        // plotting a zero that never happened.
-        _stats.Read();
-
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
 
         try
         {
             while (await timer.WaitForNextTickAsync(_lifetime.Token).ConfigureAwait(true))
             {
-                Update(_stats.Read());
+                await UpdateGpuAsync().ConfigureAwait(true);
             }
         }
         catch (OperationCanceledException)
@@ -357,8 +377,17 @@ public sealed class SystemInfoWindow : Window
         }
     }
 
-    private void Update(SystemStats stats)
+    /// <summary>A sweep landed while the window is open: plot it and refresh
+    /// the numbers. Raised on the UI thread.</summary>
+    private void OnRecorded(SystemHistory.Entry entry)
     {
+        Append(entry);
+        PopulateNumbers(entry.Stats);
+    }
+
+    private void Append(SystemHistory.Entry entry)
+    {
+        var stats = entry.Stats;
         var memoryPercent =
             stats.MemoryTotal == 0 ? 0 : stats.MemoryUsed * 100.0 / stats.MemoryTotal;
 
@@ -380,8 +409,8 @@ public sealed class SystemInfoWindow : Window
             _coreGraphs[i].Append(stats.PerCoreCpuPercent[i]);
         }
 
-        _ = UpdateGpuAsync();
-        PopulateNumbers(stats);
+        Push(_topCpu, entry.TopCpu);
+        Push(_topMemory, entry.TopMemory);
     }
 
     private async Task UpdateGpuAsync()

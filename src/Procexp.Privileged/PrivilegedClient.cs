@@ -337,7 +337,7 @@ public sealed class PrivilegedClient
             throw new ProviderException(
                 ProviderErrorKind.HelperUnavailable,
                 e.SocketErrorCode == SocketError.AccessDenied
-                    ? $"not permitted to use the helper — membership of the '{HelperConstants.AccessGroup}' group is required"
+                    ? AccessDeniedMessage()
                     : $"could not reach the helper: {e.Message}"
             );
         }
@@ -348,5 +348,35 @@ public sealed class PrivilegedClient
                 "the helper did not respond in time"
             );
         }
+    }
+
+    /// <summary>
+    /// Distinguishes "not a member" from "member since this session began". The
+    /// kernel checks the credentials the session started with, so a grant made
+    /// after login only takes effect at the next one — telling that user to get
+    /// group membership they already have would be a dead end.
+    /// </summary>
+    private static string AccessDeniedMessage()
+    {
+        try
+        {
+            var line = File.ReadLines("/etc/group")
+                .FirstOrDefault(l =>
+                    l.StartsWith(HelperConstants.AccessGroup + ":", StringComparison.Ordinal)
+                );
+            var members = line?.Split(':').ElementAtOrDefault(3)?.Split(',') ?? [];
+            if (members.Contains(Environment.UserName, StringComparer.Ordinal))
+            {
+                return $"the '{HelperConstants.AccessGroup}' group was granted after this "
+                    + "session began — log out and back in to use the helper";
+            }
+        }
+        catch (IOException)
+        {
+            // No readable group database; the generic message is all we know.
+        }
+
+        return "not permitted to use the helper — membership of the "
+            + $"'{HelperConstants.AccessGroup}' group is required";
     }
 }

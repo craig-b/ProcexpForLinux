@@ -72,6 +72,9 @@ public sealed class DataTableView<T> : VirtualTableBase
 
     public event EventHandler? SortChanged;
 
+    /// <summary>Raised when a row is double-clicked.</summary>
+    public event EventHandler? RowActivated;
+
     protected override int RowCount => _rows.Count;
 
     protected override double ScrollableWidth => _columns.Sum(c => c.Width);
@@ -273,6 +276,11 @@ public sealed class DataTableView<T> : VirtualTableBase
         }
 
         SetSelectedIndex(RowIndexAt(point));
+
+        if (e.ClickCount == 2 && SelectedIndex >= 0)
+        {
+            RowActivated?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void HandleHeaderClick(Point point)

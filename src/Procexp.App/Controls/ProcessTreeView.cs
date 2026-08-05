@@ -40,6 +40,21 @@ public sealed class ProcessTreeView : VirtualTableBase
     protected override string? RowSearchText(int row) =>
         row >= 0 && row < _rows.Count ? _rows[row].Process.Name : null;
 
+    /// <summary>Select and reveal the row for a pid, if it is on screen.</summary>
+    public bool SelectPid(int pid)
+    {
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            if (_rows[i].Process.Id.Pid == pid)
+            {
+                MoveSelectionTo(i);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     protected override double FrozenWidth => NamePaneWidth;
 
     protected override double ScrollableWidth => _columns.Skip(1).Sum(c => c.Width);

@@ -34,6 +34,7 @@ public sealed class FindHandleWindow : Window
         MinWidth = 320,
     };
     private readonly Button _search;
+    private readonly Button _stop;
     private readonly TextBlock _status = new()
     {
         Margin = new Thickness(0, 8, 0, 0),
@@ -81,6 +82,23 @@ public sealed class FindHandleWindow : Window
         };
         _search.Click += (_, _) => _ = RunSearchAsync();
 
+        _stop = new Button
+        {
+            Content = "Stop",
+            MinWidth = 70,
+            IsEnabled = false,
+        };
+        _stop.Click += (_, _) => _search_cancellation?.Cancel();
+
+        // Double-click (or Enter later) jumps to the process holding the match.
+        _results.RowActivated += (_, _) =>
+        {
+            if (_results.SelectedItem is { } match)
+            {
+                MatchActivated?.Invoke(match.Pid, match.Kind);
+            }
+        };
+
         _query.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -98,13 +116,20 @@ public sealed class FindHandleWindow : Window
     /// <summary>One process holding something that matched.</summary>
     public sealed record Match(int Pid, string ProcessName, string Kind, string Detail);
 
+    /// <summary>
+    /// Raised when the user activates a result: the pid to select, and the
+    /// match kind, so the main window can switch the lower pane to the view
+    /// the match came from.
+    /// </summary>
+    public event Action<int, string>? MatchActivated;
+
     private void BuildLayout()
     {
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Children = { _query, _search },
+            Children = { _query, _search, _stop },
         };
 
         var top = new StackPanel
@@ -135,6 +160,7 @@ public sealed class FindHandleWindow : Window
         var token = _search_cancellation.Token;
 
         _search.IsEnabled = false;
+        _stop.IsEnabled = true;
         _results.SetRows([]);
         _status.Text = "Searching...";
 
@@ -189,11 +215,14 @@ public sealed class FindHandleWindow : Window
         }
         catch (OperationCanceledException)
         {
-            _status.Text = "Search cancelled.";
+            // What was found before the stop is still worth showing.
+            _results.SetRows([.. matches]);
+            _status.Text = $"Stopped after {searched} processes — {matches.Count} matches so far.";
         }
         finally
         {
             _search.IsEnabled = true;
+            _stop.IsEnabled = false;
         }
     }
 

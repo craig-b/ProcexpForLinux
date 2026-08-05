@@ -794,6 +794,21 @@ public partial class MainWindow : Window
     private void ShowFind()
     {
         var find = new FindHandleWindow(_sampler, () => _list.Current, _tree.IsDarkMode);
+        find.MatchActivated += (pid, kind) =>
+        {
+            if (!_tree.SelectPid(pid))
+            {
+                return;
+            }
+
+            // Show the match where it lives: the lower pane, in the mode the
+            // hit came from.
+            Get<ToggleButton>("LowerPaneToggle").IsChecked = true;
+            Get<ComboBox>("PaneModeCombo").SelectedIndex = (int)(
+                kind == "Mapped file" ? LowerPaneMode.Modules : LowerPaneMode.Handles
+            );
+            Activate();
+        };
         find.Show(this);
     }
 

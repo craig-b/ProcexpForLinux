@@ -28,6 +28,16 @@ public sealed class PrivilegedClient
     /// <summary>Verify the helper is reachable and speaks a protocol we understand.</summary>
     public async Task<bool> HandshakeAsync(CancellationToken cancellationToken = default)
     {
+        return await ProbeAsync(cancellationToken).ConfigureAwait(false) is null;
+    }
+
+    /// <summary>
+    /// Handshake that keeps the reason: null on success, otherwise a
+    /// human-readable explanation of why the helper cannot be used — the
+    /// distinction <see cref="HandshakeAsync"/> flattens away.
+    /// </summary>
+    public async Task<string?> ProbeAsync(CancellationToken cancellationToken = default)
+    {
         try
         {
             var response = await SendAsync(
@@ -36,11 +46,19 @@ public sealed class PrivilegedClient
                 )
                 .ConfigureAwait(false);
 
-            return response.Ok && response.Version == HelperConstants.ProtocolVersion;
+            return response switch
+            {
+                { Ok: false } => response.Error ?? "the helper rejected the handshake",
+                { Version: not HelperConstants.ProtocolVersion } =>
+                    $"the helper speaks protocol version {response.Version}, "
+                        + $"this build expects {HelperConstants.ProtocolVersion} — "
+                        + "restart it to pick up the installed binary",
+                _ => null,
+            };
         }
-        catch (ProviderException)
+        catch (ProviderException e)
         {
-            return false;
+            return e.Message;
         }
     }
 
@@ -350,33 +368,90 @@ public sealed class PrivilegedClient
         }
     }
 
+    // Computed once: every branch's remedy is a new login session or a helper
+    // restart, both of which replace this process, so the verdict cannot
+    // usefully change within it — and the sweeps that hit EACCES do so once
+    // per process per tick, which is no place for repeated file parsing.
+    private static string? accessDeniedMessage;
+
     /// <summary>
-    /// Distinguishes "not a member" from "member since this session began". The
-    /// kernel checks the credentials the session started with, so a grant made
-    /// after login only takes effect at the next one — telling that user to get
-    /// group membership they already have would be a dead end.
+    /// Explains an EACCES from the socket. The kernel judged the credentials
+    /// this process is actually running with, so the diagnosis starts from
+    /// those (via <c>/proc/self/status</c>) rather than guessing from the
+    /// group database: holding the gid yet being refused points at the helper,
+    /// membership on disk without the gid means the grant postdates this
+    /// session, and neither means membership is genuinely absent — or managed
+    /// somewhere NSS-only that the direct file read cannot see.
     /// </summary>
     private static string AccessDeniedMessage()
     {
-        try
+        return accessDeniedMessage ??= BuildAccessDeniedMessage();
+    }
+
+    private static string BuildAccessDeniedMessage()
+    {
+        var generic =
+            "not permitted to use the helper — membership of the "
+            + $"'{HelperConstants.AccessGroup}' group is required";
+
+        var group = GroupDatabase.ReadGroup(HelperConstants.AccessGroup);
+        if (group is null)
         {
-            var line = File.ReadLines("/etc/group")
-                .FirstOrDefault(l =>
-                    l.StartsWith(HelperConstants.AccessGroup + ":", StringComparison.Ordinal)
-                );
-            var members = line?.Split(':').ElementAtOrDefault(3)?.Split(',') ?? [];
-            if (members.Contains(Environment.UserName, StringComparer.Ordinal))
-            {
-                return $"the '{HelperConstants.AccessGroup}' group was granted after this "
-                    + "session began — log out and back in to use the helper";
-            }
-        }
-        catch (IOException)
-        {
-            // No readable group database; the generic message is all we know.
+            return generic;
         }
 
-        return "not permitted to use the helper — membership of the "
-            + $"'{HelperConstants.AccessGroup}' group is required";
+        if (CurrentGids().Contains(group.Value.Gid))
+        {
+            return $"this session already holds the '{HelperConstants.AccessGroup}' group "
+                + "yet the helper socket refused it — the helper may predate the group; "
+                + "try 'systemctl restart procexp-helper'";
+        }
+
+        var user = Environment.UserName;
+        var isMemberOnDisk =
+            (user.Length > 0 && group.Value.Members.Contains(user, StringComparer.Ordinal))
+            || GroupDatabase.ReadPrimaryGid(user) == group.Value.Gid;
+
+        return isMemberOnDisk
+            ? $"the '{HelperConstants.AccessGroup}' group was granted after this "
+                + "session began — log out and back in to use the helper"
+            : generic;
+    }
+
+    /// <summary>
+    /// Every gid this process holds: real, effective, saved and fs from the
+    /// <c>Gid:</c> line, plus the supplementary list from <c>Groups:</c>.
+    /// </summary>
+    private static uint[] CurrentGids()
+    {
+        try
+        {
+            var gids = new List<uint>();
+            foreach (var line in File.ReadLines("/proc/self/status"))
+            {
+                if (
+                    line.StartsWith("Gid:", StringComparison.Ordinal)
+                    || line.StartsWith("Groups:", StringComparison.Ordinal)
+                )
+                {
+                    foreach (
+                        var field in line[(line.IndexOf(':') + 1)..]
+                            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                    )
+                    {
+                        if (uint.TryParse(field, out var gid))
+                        {
+                            gids.Add(gid);
+                        }
+                    }
+                }
+            }
+
+            return [.. gids];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 }

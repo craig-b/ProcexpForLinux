@@ -104,8 +104,12 @@ public sealed class ActionCoordinator(Window owner)
                     $"Not permitted to act on {process.Name} (pid {process.Id.Pid}). "
                         + $"It belongs to {process.UserName ?? process.Uid.ToString()}; "
                         + "installing the privileged helper would allow this.",
+                // The client's message says why — not in the group, granted
+                // after login, helper needs a restart — and each of those has a
+                // different remedy, so it must reach the user verbatim.
                 ProviderErrorKind.HelperUnavailable =>
-                    "The privileged helper is not available. See docs/HELPER.md.",
+                    $"The privileged helper could not be used: {e.Message}.\n\n"
+                        + "See docs/HELPER.md.",
                 _ => e.Message,
             };
 

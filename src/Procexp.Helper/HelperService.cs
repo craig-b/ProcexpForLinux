@@ -373,7 +373,7 @@ internal sealed partial class HelperService(Action<string> log)
             return true;
         }
 
-        var group = ReadGroup(HelperConstants.AccessGroup);
+        var group = GroupDatabase.ReadGroup(HelperConstants.AccessGroup);
         if (group is null)
         {
             // No group means nobody was authorised at install time.
@@ -385,59 +385,8 @@ internal sealed partial class HelperService(Action<string> log)
             return true;
         }
 
-        var name = ReadUserName(peer.Uid);
+        var name = GroupDatabase.ReadUserName(peer.Uid);
         return name is not null && group.Value.Members.Contains(name, StringComparer.Ordinal);
-    }
-
-    private static (uint Gid, string[] Members)? ReadGroup(string name)
-    {
-        try
-        {
-            foreach (var line in File.ReadLines("/etc/group"))
-            {
-                // name:password:gid:member,member
-                var fields = line.Split(':');
-                if (
-                    fields.Length >= 4
-                    && fields[0] == name
-                    && uint.TryParse(fields[2], out var gid)
-                )
-                {
-                    return (gid, fields[3].Split(',', StringSplitOptions.RemoveEmptyEntries));
-                }
-            }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-
-        return null;
-    }
-
-    private static string? ReadUserName(uint uid)
-    {
-        try
-        {
-            foreach (var line in File.ReadLines("/etc/passwd"))
-            {
-                var fields = line.Split(':');
-                if (
-                    fields.Length >= 3
-                    && uint.TryParse(fields[2], out var candidate)
-                    && candidate == uid
-                )
-                {
-                    return fields[0];
-                }
-            }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-
-        return null;
     }
 
     private void PrepareSocketDirectory()
@@ -459,7 +408,7 @@ internal sealed partial class HelperService(Action<string> log)
 
     private void ApplyGroupOwnership(string path)
     {
-        var group = ReadGroup(HelperConstants.AccessGroup);
+        var group = GroupDatabase.ReadGroup(HelperConstants.AccessGroup);
         if (group is null)
         {
             log(

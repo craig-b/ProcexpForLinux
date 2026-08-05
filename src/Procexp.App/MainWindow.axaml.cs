@@ -830,18 +830,19 @@ public partial class MainWindow : Window
     private async Task ShowHelperStatusAsync()
     {
         var available = PrivilegedClient.IsAvailable;
-        var reachable =
-            available && await new PrivilegedClient().HandshakeAsync().ConfigureAwait(true);
+        var failure = available
+            ? await new PrivilegedClient().ProbeAsync().ConfigureAwait(true)
+            : null;
 
-        var message = (available, reachable) switch
+        var message = (available, failure) switch
         {
             (false, _) => "The privileged helper is not installed.\n\n"
                 + "Without it, I/O counters, proportional memory and environments are blank "
                 + "for other users' processes, and cross-user actions fail. Everything else works.\n\n"
                 + "See docs/HELPER.md to install it.",
-            (true, false) => $"The helper socket exists but did not respond.\n\n"
-                + $"You may not be a member of the '{HelperConstants.AccessGroup}' group, "
-                + "or the helper may be a different version.",
+            (true, not null) => "The helper socket exists but could not be used:\n\n"
+                + $"{failure}.\n\n"
+                + "See docs/HELPER.md.",
             _ => "The privileged helper is installed and responding.",
         };
 

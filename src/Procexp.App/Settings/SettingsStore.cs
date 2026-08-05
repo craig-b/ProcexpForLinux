@@ -111,6 +111,7 @@ public sealed record AppSettings
     public bool ConfirmActions { get; init; } = true;
     public IReadOnlyList<ColorRuleSetting> ColorRules { get; init; } = [];
     public bool AlwaysOnTop { get; init; }
+    public bool ShowTrayIcon { get; init; } = true;
     public double NamePaneWidth { get; init; } = 260;
 
     public double WindowWidth { get; init; } = 1200;

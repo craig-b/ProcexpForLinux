@@ -102,6 +102,8 @@ public partial class MainWindow : Window
 
     private readonly ColumnCoordinator _columns = null!;
 
+    private readonly TrayIconController? _trayIcon;
+
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
@@ -182,7 +184,13 @@ public partial class MainWindow : Window
         {
             _lifetime.Cancel();
             _enricher.Dispose();
+            _trayIcon?.Dispose();
             _settings.SaveNow();
+        };
+
+        _trayIcon = new TrayIconController(this, ShowSystemInfo)
+        {
+            IsVisible = _settings.Loaded.ShowTrayIcon,
         };
     }
 
@@ -212,6 +220,7 @@ public partial class MainWindow : Window
         Get<MenuItem>("MenuTreeMode").IsChecked = _settings.Loaded.TreeMode;
         Get<MenuItem>("MenuHighlight").IsChecked = _settings.Loaded.HighlightNewAndDead;
         Get<MenuItem>("MenuAlwaysOnTop").IsChecked = _settings.Loaded.AlwaysOnTop;
+        Get<MenuItem>("MenuTrayIcon").IsChecked = _settings.Loaded.ShowTrayIcon;
         Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
 
         // The speed radio group has to agree with the interval that was restored,
@@ -242,6 +251,7 @@ public partial class MainWindow : Window
             ColorRules = ColorRuleSetting.FromRules(_colorRules),
             ColumnSets = _columns.ColumnSets,
             AlwaysOnTop = Topmost,
+            ShowTrayIcon = Get<MenuItem>("MenuTrayIcon").IsChecked,
             NamePaneWidth = _tree.NamePaneWidth,
             WindowWidth = Width,
             WindowHeight = Height,
@@ -488,6 +498,17 @@ public partial class MainWindow : Window
             _settings.ScheduleSave();
         };
 
+        var trayIcon = Get<MenuItem>("MenuTrayIcon");
+        trayIcon.Click += (_, _) =>
+        {
+            if (_trayIcon is not null)
+            {
+                _trayIcon.IsVisible = trayIcon.IsChecked;
+            }
+
+            _settings.ScheduleSave();
+        };
+
         Get<MenuItem>("MenuInstallHelper").Click += (_, _) => _ = ShowHelperStatusAsync();
 
         var pause = Get<MenuItem>("MenuPause");
@@ -656,6 +677,8 @@ public partial class MainWindow : Window
         // Bytes(0) formats as "", which would leave a dangling "/s".
         var ioRate = system.DiskBytesPerSec;
         _ioValue.Text = ioRate > 0 ? $"{ValueFormat.Bytes(ioRate)}/s" : "0 B/s";
+
+        _trayIcon?.Update(system.CpuTotalPercent, memoryPercent);
 
         // Who was busiest this second, for the CPU and memory graphs' hover
         // readout. CpuPercent is Irix-style — 100 per core — so it is scaled

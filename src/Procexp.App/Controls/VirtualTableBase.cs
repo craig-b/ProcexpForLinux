@@ -88,6 +88,7 @@ public abstract class VirtualTableBase : Control
             {
                 _verticalOffset = clamped;
                 InvalidateVisual();
+                RefreshTooltip();
             }
         }
     }
@@ -102,6 +103,7 @@ public abstract class VirtualTableBase : Control
             {
                 _horizontalOffset = clamped;
                 InvalidateVisual();
+                RefreshTooltip();
             }
         }
     }
@@ -346,6 +348,7 @@ public abstract class VirtualTableBase : Control
 
     private int _tooltipRow = -1;
     private double _tooltipX = double.NaN;
+    private Point? _pointerPoint;
 
     /// <summary>
     /// Tooltip text for a point inside the rows area, or null for none. The
@@ -360,6 +363,8 @@ public abstract class VirtualTableBase : Control
     /// </summary>
     protected void UpdateTooltip(Point point)
     {
+        _pointerPoint = point;
+
         if (point.Y < HeaderHeight)
         {
             ClearTooltip();
@@ -382,8 +387,30 @@ public abstract class VirtualTableBase : Control
         _tooltipX = point.X;
 
         var text = TooltipFor(row, point);
+
+        // Just set the tip; never force IsOpen. An open tooltip picks up the
+        // new text in place, and closing it by hand would kill it for good:
+        // the tooltip service only re-arms its show timer when the pointer
+        // crosses into a control, not while it stays inside one.
         ToolTip.SetTip(this, text);
-        ToolTip.SetIsOpen(this, false);
+    }
+
+    /// <summary>
+    /// Re-evaluate the tooltip after the content changed under a stationary
+    /// pointer — a data refresh or a scroll can put a different row (or a
+    /// different process in the same row) beneath it, and no pointer event
+    /// fires to notice.
+    /// </summary>
+    protected void RefreshTooltip()
+    {
+        if (_pointerPoint is not { } point)
+        {
+            return;
+        }
+
+        _tooltipRow = -1;
+        _tooltipX = double.NaN;
+        UpdateTooltip(point);
     }
 
     private void ClearTooltip()
@@ -401,6 +428,7 @@ public abstract class VirtualTableBase : Control
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
+        _pointerPoint = null;
         ClearTooltip();
     }
 

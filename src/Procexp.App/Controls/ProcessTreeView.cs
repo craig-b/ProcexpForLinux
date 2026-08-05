@@ -199,6 +199,7 @@ public sealed class ProcessTreeView : VirtualTableBase
 
         ClampScrollAfterRowChange();
         InvalidateVisual();
+        RefreshTooltip();
     }
 
     private void SelectFirstRow() => SetSelectedIndex(0);

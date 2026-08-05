@@ -156,6 +156,7 @@ public sealed class DataTableView<T> : VirtualTableBase
 
         ClampScrollAfterRowChange();
         InvalidateVisual();
+        RefreshTooltip();
     }
 
     private IReadOnlyList<T> Sort(IReadOnlyList<T> rows)

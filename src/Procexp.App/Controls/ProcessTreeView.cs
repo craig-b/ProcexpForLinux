@@ -35,6 +35,31 @@ public sealed class ProcessTreeView : VirtualTableBase
     public event EventHandler<ProcessId>? ToggleRequested;
     public event EventHandler<Column>? HeaderClicked;
 
+    /// <summary>
+    /// Raised when the user resizes a column or drags one to a new position.
+    /// Carries the new layout, so the window can persist it.
+    /// </summary>
+    public event EventHandler<IReadOnlyList<(Column Column, double Width)>>? ColumnsChanged;
+
+    // --- Header drag state --------------------------------------------------
+    //
+    // Two gestures share the header: dragging an edge resizes the column to its
+    // left, dragging the body moves the column. Which one begins is decided by
+    // where the press lands — inside EdgeGrip pixels of an edge is a resize —
+    // and a move only starts once the pointer has travelled far enough to rule
+    // out a click, so sorting by clicking a header still works.
+
+    private const double EdgeGrip = 4;
+    private const double DragThreshold = 4;
+    private const double MinColumnWidth = 40;
+
+    private int _resizingColumn = -1;
+    private int _draggingColumn = -1;
+    private int _dropTarget = -1;
+    private double _pressX;
+    private double _pressWidth;
+    private bool _dragArmed;
+
     protected override int RowCount => _rows.Count;
 
     protected override string? RowSearchText(int row) =>
@@ -87,7 +112,14 @@ public sealed class ProcessTreeView : VirtualTableBase
         var previouslySelected = SelectedProcess?.Id;
 
         _rows = rows;
-        _columns = columns;
+
+        // A sweep lands every second, including mid-drag — and the window only
+        // learns the new layout when the gesture ends. Taking its stale copy
+        // now would snap the column back under the pointer.
+        if (_resizingColumn < 0 && _draggingColumn < 0)
+        {
+            _columns = columns;
+        }
 
         if (previouslySelected is { } id)
         {
@@ -291,6 +323,18 @@ public sealed class ProcessTreeView : VirtualTableBase
                     new Point(x + width, 0),
                     new Point(x + width, HeaderHeight)
                 );
+
+                // Where a dragged column would land, drawn as an insertion bar
+                // so the drop is predictable rather than a guess.
+                if (_dropTarget == c && _draggingColumn > 0 && _dragArmed)
+                {
+                    var edge = _dropTarget > _draggingColumn ? x + width : x;
+                    context.DrawLine(
+                        Palette.DropIndicator,
+                        new Point(edge, 0),
+                        new Point(edge, HeaderHeight)
+                    );
+                }
             }
 
             x += width;
@@ -338,7 +382,27 @@ public sealed class ProcessTreeView : VirtualTableBase
 
         if (point.Y < HeaderHeight)
         {
-            HandleHeaderClick(point);
+            // A press on the header may become a resize, a reorder or a sort;
+            // which it is depends on where it lands and what happens next.
+            var edge = EdgeAt(point);
+            if (edge >= 0)
+            {
+                _resizingColumn = edge;
+                _pressX = point.X;
+                _pressWidth = edge == 0 ? NamePaneWidth : _columns[edge].Width;
+                e.Pointer.Capture(this);
+                return;
+            }
+
+            var column = ColumnAt(point);
+            if (column > 0)
+            {
+                _draggingColumn = column;
+                _dragArmed = false;
+                _pressX = point.X;
+                e.Pointer.Capture(this);
+            }
+
             return;
         }
 
@@ -367,10 +431,19 @@ public sealed class ProcessTreeView : VirtualTableBase
 
     private void HandleHeaderClick(Point point)
     {
+        var column = ColumnAt(point);
+        if (column >= 0)
+        {
+            HeaderClicked?.Invoke(this, _columns[column].Column);
+        }
+    }
+
+    /// <summary>Index of the column whose header contains this point, or -1.</summary>
+    private int ColumnAt(Point point)
+    {
         if (point.X < NamePaneWidth)
         {
-            HeaderClicked?.Invoke(this, Column.Name);
-            return;
+            return 0;
         }
 
         var x = point.X - NamePaneWidth + HorizontalOffset;
@@ -381,10 +454,132 @@ public sealed class ProcessTreeView : VirtualTableBase
             accumulated += _columns[c].Width;
             if (x < accumulated)
             {
-                HeaderClicked?.Invoke(this, _columns[c].Column);
-                return;
+                return c;
             }
         }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Index of the column whose right edge this point grips, or -1. The name
+    /// pane's edge is column 0's: dragging it resizes the frozen pane, which is
+    /// the same gesture users expect from the splitter.
+    /// </summary>
+    private int EdgeAt(Point point)
+    {
+        if (Math.Abs(point.X - NamePaneWidth) <= EdgeGrip)
+        {
+            return 0;
+        }
+
+        if (point.X < NamePaneWidth)
+        {
+            return -1;
+        }
+
+        var x = point.X - NamePaneWidth + HorizontalOffset;
+        double accumulated = 0;
+
+        for (var c = 1; c < _columns.Count; c++)
+        {
+            accumulated += _columns[c].Width;
+            if (Math.Abs(x - accumulated) <= EdgeGrip)
+            {
+                return c;
+            }
+        }
+
+        return -1;
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+
+        var point = e.GetPosition(this);
+
+        if (_resizingColumn >= 0)
+        {
+            var width = Math.Max(MinColumnWidth, _pressWidth + (point.X - _pressX));
+
+            if (_resizingColumn == 0)
+            {
+                NamePaneWidth = Math.Clamp(width, 120, 900);
+            }
+            else
+            {
+                var updated = _columns.ToList();
+                updated[_resizingColumn] = (updated[_resizingColumn].Column, width);
+                _columns = updated;
+            }
+
+            InvalidateVisual();
+            return;
+        }
+
+        if (_draggingColumn > 0)
+        {
+            if (!_dragArmed && Math.Abs(point.X - _pressX) < DragThreshold)
+            {
+                return;
+            }
+
+            _dragArmed = true;
+            var target = ColumnAt(point);
+            _dropTarget = target > 0 ? target : _dropTarget;
+            InvalidateVisual();
+            return;
+        }
+
+        // Not dragging: the cursor advertises what the header edge under it does.
+        Cursor =
+            point.Y < HeaderHeight && EdgeAt(point) >= 0
+                ? new Cursor(StandardCursorType.SizeWestEast)
+                : Cursor.Default;
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+
+        var wasResizing = _resizingColumn >= 0;
+        var wasDragging = _draggingColumn > 0 && _dragArmed;
+        var dragged = _draggingColumn;
+        var target = _dropTarget;
+
+        _resizingColumn = -1;
+        _draggingColumn = -1;
+        _dropTarget = -1;
+        e.Pointer.Capture(null);
+
+        if (wasResizing)
+        {
+            ColumnsChanged?.Invoke(this, _columns);
+            InvalidateVisual();
+            return;
+        }
+
+        if (wasDragging && target > 0 && target != dragged)
+        {
+            var updated = _columns.ToList();
+            var moved = updated[dragged];
+            updated.RemoveAt(dragged);
+            updated.Insert(target, moved);
+            _columns = updated;
+
+            ColumnsChanged?.Invoke(this, _columns);
+            InvalidateVisual();
+            return;
+        }
+
+        // A press that neither resized nor moved anything is a sort click.
+        if (!_dragArmed && e.GetPosition(this).Y < HeaderHeight)
+        {
+            HandleHeaderClick(e.GetPosition(this));
+        }
+
+        _dragArmed = false;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

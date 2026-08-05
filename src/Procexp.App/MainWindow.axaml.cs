@@ -317,6 +317,16 @@ public partial class MainWindow : Window
             }
         };
 
+        // Resize and reorder rewrite the layout the window owns, so it takes
+        // the control's version back and persists it.
+        _tree.ColumnsChanged += (_, columns) =>
+        {
+            _columns = columns;
+            Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
+            SyncScrollBars();
+            ScheduleSave();
+        };
+
         _tree.ToggleRequested += (_, id) =>
         {
             if (!_collapsed.Remove(id))

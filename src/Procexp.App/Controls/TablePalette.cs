@@ -30,6 +30,10 @@ public sealed class TablePalette
         Expander = dark ? Rgb(180, 180, 180) : Rgb(80, 80, 80);
         Divider = new Pen(dark ? Rgb(60, 60, 60) : Rgb(210, 210, 210), 1);
 
+        // Deliberately loud: it marks where a dragged column will land, and a
+        // subtle hint would leave the drop a guess.
+        DropIndicator = new Pen(Rgb(60, 130, 220), 3);
+
         // Selection stays the same in both themes: it must read as selected
         // regardless of the row tint underneath it.
         Selection = Rgb(0, 92, 168);
@@ -54,6 +58,7 @@ public sealed class TablePalette
     public IBrush InactiveSelection { get; }
     public IBrush SelectedText { get; }
     public IPen Divider { get; }
+    public IPen DropIndicator { get; }
 
     /// <summary>Brush for a row-colouring rule, cached by colour.</summary>
     public IBrush RowBrush(Rgba colour)

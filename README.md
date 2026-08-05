@@ -27,8 +27,12 @@ settings all function; the data layer is verified against the live kernel on eve
 checker.
 
 Not yet done: per-process network rates (Linux exposes no counter — see `Procexp.Net`), GPU memory
-on most DRM drivers, type-to-select, tooltips, interactive column resize and drag-reorder, process
-icons, and Flatpak/AppImage packaging.
+on most DRM drivers, and Flatpak/AppImage packaging.
+
+Process icons are deliberately absent rather than pending. Linux has no per-executable icon API:
+icons belong to applications via `.desktop` entries, so only the handful of GUI processes would ever
+resolve one and every daemon, shell and kernel thread would show the same generic glyph. The row
+colours already carry the categorical signal icons carry on macOS.
 
 ## Screenshot
 

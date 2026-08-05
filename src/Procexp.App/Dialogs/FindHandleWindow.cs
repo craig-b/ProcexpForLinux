@@ -95,7 +95,7 @@ public sealed class FindHandleWindow : Window
         {
             if (_results.SelectedItem is { } match)
             {
-                MatchActivated?.Invoke(match.Pid, match.Kind);
+                MatchActivated?.Invoke(match.Id, match.Kind);
             }
         };
 
@@ -114,14 +114,17 @@ public sealed class FindHandleWindow : Window
     }
 
     /// <summary>One process holding something that matched.</summary>
-    public sealed record Match(int Pid, string ProcessName, string Kind, string Detail);
+    public sealed record Match(ProcessId Id, string ProcessName, string Kind, string Detail)
+    {
+        public int Pid => Id.Pid;
+    }
 
     /// <summary>
     /// Raised when the user activates a result: the pid to select, and the
     /// match kind, so the main window can switch the lower pane to the view
     /// the match came from.
     /// </summary>
-    public event Action<int, string>? MatchActivated;
+    public event Action<ProcessId, string>? MatchActivated;
 
     private void BuildLayout()
     {
@@ -247,9 +250,7 @@ public sealed class FindHandleWindow : Window
             {
                 if (module.Path.Contains(needle, StringComparison.OrdinalIgnoreCase))
                 {
-                    matches.Add(
-                        new Match(process.Id.Pid, process.Name, "Mapped file", module.Path)
-                    );
+                    matches.Add(new Match(process.Id, process.Name, "Mapped file", module.Path));
                 }
             }
 
@@ -272,7 +273,7 @@ public sealed class FindHandleWindow : Window
                 {
                     matches.Add(
                         new Match(
-                            process.Id.Pid,
+                            process.Id,
                             process.Name,
                             descriptor.Kind.ToString(),
                             $"fd {descriptor.Fd}: {descriptor.Name}"

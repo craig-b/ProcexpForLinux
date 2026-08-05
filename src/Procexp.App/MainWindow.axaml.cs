@@ -794,9 +794,9 @@ public partial class MainWindow : Window
     private void ShowFind()
     {
         var find = new FindHandleWindow(_sampler, () => _list.Current, _tree.IsDarkMode);
-        find.MatchActivated += (pid, kind) =>
+        find.MatchActivated += (id, kind) =>
         {
-            if (!_tree.SelectPid(pid))
+            if (!_tree.SelectProcess(id))
             {
                 return;
             }

@@ -40,12 +40,16 @@ public sealed class ProcessTreeView : VirtualTableBase
     protected override string? RowSearchText(int row) =>
         row >= 0 && row < _rows.Count ? _rows[row].Process.Name : null;
 
-    /// <summary>Select and reveal the row for a pid, if it is on screen.</summary>
-    public bool SelectPid(int pid)
+    /// <summary>
+    /// Select and reveal the row for a process, if it is still on screen.
+    /// Matched by full identity — pid and start time — so a pid recycled since
+    /// the caller captured it selects nothing rather than the wrong process.
+    /// </summary>
+    public bool SelectProcess(ProcessId id)
     {
         for (var i = 0; i < _rows.Count; i++)
         {
-            if (_rows[i].Process.Id.Pid == pid)
+            if (_rows[i].Process.Id == id)
             {
                 MoveSelectionTo(i);
                 return true;

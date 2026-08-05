@@ -18,6 +18,23 @@ set -eu
 
 REPO="${PROCEXP_REPO:-craig-b/ProcexpForLinux}"
 VERSION="${PROCEXP_VERSION:-}"
+INSTALLED_VERSION_FILE=/usr/share/procexp/version
+
+# --reinstall belongs to this script, not the installer: it defeats the
+# up-to-date short-circuit below. Filter it out while preserving the rest.
+REINSTALL=no
+i=0
+n=$#
+while [ "$i" -lt "$n" ]; do
+  arg="$1"
+  shift
+  if [ "$arg" = "--reinstall" ]; then
+    REINSTALL=yes
+  else
+    set -- "$@" "$arg"
+  fi
+  i=$((i + 1))
+done
 
 die() {
   printf 'get-procexp: %s\n' "$*" >&2
@@ -74,6 +91,16 @@ if [ -z "${VERSION}" ]; then
       | head -n 1
   )"
   [ -n "${VERSION}" ] || die "could not determine the latest release of ${REPO}"
+fi
+
+# Nothing to do when the machine already runs the version being asked for —
+# checked before any download. Absent on installs older than the version
+# file, which therefore reinstall once and gain it.
+if [ "${REINSTALL}" = no ] && [ -f "${INSTALLED_VERSION_FILE}" ] \
+  && [ "$(cat "${INSTALLED_VERSION_FILE}")" = "${VERSION}" ]; then
+  printf 'procexp %s is already installed — nothing to do.\n' "${VERSION}"
+  printf 'Reinstall anyway with: ... | sh -s -- --reinstall\n'
+  exit 0
 fi
 
 tarball="procexp-${VERSION}-${rid}.tar.gz"

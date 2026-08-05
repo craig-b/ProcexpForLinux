@@ -58,6 +58,12 @@ install -Dm644 "${ROOT}/packaging/procexp-helper.service" "${STAGE}/usr/lib/syst
 VERSION="$(git -C "${ROOT}" describe --tags --always --dirty 2> /dev/null || echo dev)"
 TARBALL="${ROOT}/artifacts/procexp-${VERSION}-${RID}.tar.gz"
 
+# Recorded so the bootstrap can answer "is this machine already up to date?"
+# without downloading anything. A tagged build writes the tag itself; dev
+# builds write something that never equals a tag, so they always reinstall.
+mkdir -p "${STAGE}/usr/share/procexp"
+printf '%s\n' "${VERSION}" > "${STAGE}/usr/share/procexp/version"
+
 # Owned by root in the archive, not by whoever ran the build: this tree is
 # extracted into /, and a user-owned /usr/lib/procexp/procexp-helper — a binary
 # systemd runs as root — would be a privilege escalation.

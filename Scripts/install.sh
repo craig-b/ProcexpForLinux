@@ -42,6 +42,7 @@ FALLBACK_FILES=(
   /usr/share/applications/procexp.desktop
   /usr/share/icons/hicolor/scalable/apps/procexp.svg
   /usr/share/procexp/install.sh
+  /usr/share/procexp/version
 )
 
 # Under `curl | sh` stdin is the pipe, but the controlling terminal can still

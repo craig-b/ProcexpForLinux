@@ -93,10 +93,10 @@ public sealed class RunDialog : Window
             .OpenFilePickerAsync(new() { Title = "Choose Program" })
             .ConfigureAwait(true);
 
-        if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
+        if (files.Count > 0 && files[0].Path is { IsAbsoluteUri: true, Scheme: "file" } uri)
         {
             // Quoted so a path with spaces survives the shell.
-            _command.Text = $"\"{path}\"";
+            _command.Text = $"\"{uri.LocalPath}\"";
             _command.CaretIndex = _command.Text.Length;
         }
     }

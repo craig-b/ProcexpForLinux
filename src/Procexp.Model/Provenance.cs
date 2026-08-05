@@ -82,6 +82,13 @@ public sealed record ProvenanceInfo
 
     public VirusTotalResult? VirusTotal { get; init; }
 
+    /// <summary>
+    /// Whether the image looks packed or obfuscated — a UPX signature or a
+    /// writable-and-executable load segment. Heuristic; feeds the Packed image
+    /// colour rule.
+    /// </summary>
+    public bool LikelyPacked { get; init; }
+
     /// <summary>Why verification failed, when it did.</summary>
     public string? VerificationError { get; init; }
 

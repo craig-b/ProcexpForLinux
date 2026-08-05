@@ -91,6 +91,33 @@ public sealed class ProcessEnricher : IDisposable
                         Version = facts.Version,
                         Provenance = facts.Provenance,
                     };
+
+                    // Flags only when the path came from the kernel's readlink,
+                    // never from the argv[0] fallback — a claim like "packaged"
+                    // or "packed" must not rest on a name the process chose.
+                    if (facts.Provenance is { } provenance && record.ExecutablePath is not null)
+                    {
+                        var flags = updated.Flags;
+
+                        if (
+                            provenance.Status
+                            is ProvenanceStatus.PackageVerified
+                                or ProvenanceStatus.PackageModified
+                        )
+                        {
+                            flags |= ProcessFlags.PackagedBinary;
+                        }
+
+                        if (provenance.LikelyPacked)
+                        {
+                            flags |= ProcessFlags.Packed;
+                        }
+
+                        if (flags != updated.Flags)
+                        {
+                            updated = updated with { Flags = flags };
+                        }
+                    }
                 }
                 else
                 {

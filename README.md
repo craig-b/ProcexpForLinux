@@ -54,7 +54,7 @@ than blocking it.
 | `src/Procexp.Net`         | Per-process sockets via netlink `sock_diag`, with a `/proc/net` fallback.                                             |
 | `src/Procexp.Provenance`  | The Linux analog of code signing — package ownership, build-id, IMA, VirusTotal.                                      |
 | `src/Procexp.Autostart`   | systemd units, XDG autostart, cron, init.d.                                                                           |
-| `src/Procexp.Actions`     | Kill, suspend/resume, renice, restart, sample.                                                                        |
+| `src/Procexp.Actions`     | Kill, suspend/resume, arbitrary signals, renice, CPU affinity, restart, core dumps.                                   |
 | `src/Procexp.Gpu`         | Per-process GPU usage from DRM `fdinfo` and NVML.                                                                     |
 | `src/Procexp.Privileged`  | Client for the privileged helper.                                                                                     |
 | `src/Procexp.Helper`      | The privileged helper daemon (`procexp-helper`).                                                                      |

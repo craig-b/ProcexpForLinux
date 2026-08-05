@@ -737,6 +737,10 @@ public sealed class ProcessPropertiesWindow : Window
         _provenanceDetail.Add("Build ID", info.BuildId);
         _provenanceDetail.Add("SHA-256", info.Sha256);
         _provenanceDetail.Add("IMA signature", info.HasImaSignature ? "present" : null);
+        _provenanceDetail.Add(
+            "Packed",
+            info.LikelyPacked ? "likely — UPX signature or writable-executable segment" : null
+        );
 
         if (info.VerificationError is { } error)
         {

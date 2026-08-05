@@ -18,6 +18,13 @@ public sealed record ElfFacts
     /// <summary>True when no symbol or debug sections remain.</summary>
     public bool IsStripped { get; init; }
 
+    /// <summary>
+    /// True when the image looks packed or self-modifying: a UPX signature, or a
+    /// loadable segment that is both writable and executable. A heuristic, and
+    /// labelled as such wherever it is shown.
+    /// </summary>
+    public bool IsLikelyPacked { get; init; }
+
     public static readonly ElfFacts NotElf = new();
 }
 
@@ -34,9 +41,12 @@ public sealed record ElfFacts
 public static class ElfInspector
 {
     private const int ElfHeaderSize64 = 64;
+    private const uint PtLoad = 1;
     private const uint PtNote = 4;
     private const uint NtGnuBuildId = 3;
     private const ushort EtDyn = 3;
+    private const uint PfExecute = 1;
+    private const uint PfWrite = 2;
 
     public static ElfFacts Inspect(string path)
     {
@@ -99,7 +109,7 @@ public static class ElfInspector
         var programHeaderSize = BinaryPrimitives.ReadUInt16LittleEndian(header[54..]);
         var programHeaderCount = BinaryPrimitives.ReadUInt16LittleEndian(header[56..]);
 
-        var buildId = FindBuildId(
+        var (buildId, writableExecutableLoad) = ScanProgramHeaders(
             stream,
             programHeaderOffset,
             programHeaderSize,
@@ -113,28 +123,64 @@ public static class ElfInspector
             IsLittleEndian = true,
             IsSharedObject = type == EtDyn,
             BuildId = buildId,
+            IsLikelyPacked = writableExecutableLoad || HasUpxSignature(stream),
         };
     }
 
-    private static string? FindBuildId(Stream stream, long offset, int entrySize, int count)
+    /// <summary>
+    /// Whether the UPX loader stub's magic appears near the front of the image.
+    /// </summary>
+    /// <remarks>
+    /// UPX writes its <c>l_info</c> block directly after the program headers, so
+    /// the first kilobyte is enough — scanning further would start matching the
+    /// string in binaries that merely mention UPX.
+    /// </remarks>
+    private static bool HasUpxSignature(Stream stream)
+    {
+        Span<byte> head = stackalloc byte[1024];
+        stream.Seek(0, SeekOrigin.Begin);
+        var read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+
+        return head[..read].IndexOf("UPX!"u8) >= 0;
+    }
+
+    private static (string? BuildId, bool WritableExecutableLoad) ScanProgramHeaders(
+        Stream stream,
+        long offset,
+        int entrySize,
+        int count
+    )
     {
         if (offset <= 0 || entrySize < 56 || count is <= 0 or > 512)
         {
-            return null;
+            return (null, false);
         }
 
         var entry = new byte[entrySize];
+        string? buildId = null;
+        var writableExecutableLoad = false;
 
         for (var i = 0; i < count; i++)
         {
             stream.Seek(offset + ((long)i * entrySize), SeekOrigin.Begin);
             if (stream.ReadAtLeast(entry, entrySize, throwOnEndOfStream: false) < entrySize)
             {
-                return null;
+                return (buildId, writableExecutableLoad);
             }
 
             var type = BinaryPrimitives.ReadUInt32LittleEndian(entry);
-            if (type != PtNote)
+
+            // A loadable segment mapped writable and executable is the classic
+            // packer trait: the stub unpacks into memory it then jumps into.
+            // Ordinary toolchain output never asks for W|X in the file itself.
+            if (type == PtLoad)
+            {
+                var flags = BinaryPrimitives.ReadUInt32LittleEndian(entry.AsSpan(4));
+                writableExecutableLoad |= (flags & (PfWrite | PfExecute)) == (PfWrite | PfExecute);
+                continue;
+            }
+
+            if (type != PtNote || buildId is not null)
             {
                 continue;
             }
@@ -154,14 +200,10 @@ public static class ElfInspector
                 continue;
             }
 
-            var buildId = ScanNotes(notes);
-            if (buildId is not null)
-            {
-                return buildId;
-            }
+            buildId = ScanNotes(notes);
         }
 
-        return null;
+        return (buildId, writableExecutableLoad);
     }
 
     /// <summary>

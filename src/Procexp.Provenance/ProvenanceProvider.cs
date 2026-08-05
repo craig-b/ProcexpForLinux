@@ -96,6 +96,7 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
                 BundleId = bundleId,
                 BuildId = elf.BuildId,
                 HasImaSignature = hasIma,
+                LikelyPacked = elf.IsLikelyPacked,
             };
         }
 
@@ -110,6 +111,7 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
                         : ProvenanceStatus.Unpackaged,
                 BuildId = elf.BuildId,
                 HasImaSignature = hasIma,
+                LikelyPacked = elf.IsLikelyPacked,
                 VerificationError =
                     _packages.Kind == PackageManagerKind.None
                         ? "no package database on this system"
@@ -130,6 +132,7 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
             PackageDescription = owner.Description,
             BuildId = elf.BuildId,
             HasImaSignature = hasIma,
+            LikelyPacked = elf.IsLikelyPacked,
         };
     }
 

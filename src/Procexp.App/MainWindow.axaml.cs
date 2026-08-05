@@ -77,9 +77,8 @@ public partial class MainWindow : Window
     private bool _confirmActions = true;
     private IReadOnlyList<ProcessColorRule> _colorRules = ProcessColorRule.Defaults;
 
-    private readonly AppSettings _settings = SettingsStore.Load();
+    private readonly SettingsCoordinator _settings = null!;
     private bool _enrichmentDirty;
-    private CancellationTokenSource? _saveDebounce;
 
     private readonly RollingAverage _layoutTimes = new();
 
@@ -90,6 +89,7 @@ public partial class MainWindow : Window
         AvaloniaXamlLoader.Load(this);
 
         _actions = new ActionCoordinator(this, () => _confirmActions);
+        _settings = new SettingsCoordinator(GatherSettings);
         _sweep = new SweepController(_sampler, ApplySnapshot, OnHighlightTick, _lifetime.Token);
         _tree = Get<ProcessTreeView>("Tree");
         _verticalScroll = Get<ScrollBar>("VerticalScroll");
@@ -102,12 +102,12 @@ public partial class MainWindow : Window
         _columns = new ColumnCoordinator(
             this,
             _tree,
-            _settings.ColumnWidths,
+            _settings.Loaded.ColumnWidths,
             Rebuild,
-            ScheduleSave,
-            SaveSettings
+            _settings.ScheduleSave,
+            _settings.SaveNow
         );
-        _columns.Apply(_settings.Columns);
+        _columns.Apply(_settings.Loaded.Columns);
 
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
@@ -132,7 +132,7 @@ public partial class MainWindow : Window
 
         // Window geometry changes constantly while dragging, so it rides the same
         // debounce as everything else.
-        SizeChanged += (_, _) => ScheduleSave();
+        SizeChanged += (_, _) => _settings.ScheduleSave();
 
         // Enrichment arrives out of band, so the list has to be told. Marshalled
         // and coalesced: a first sweep queues several hundred image lookups, and
@@ -142,9 +142,9 @@ public partial class MainWindow : Window
 
         Opened += (_, _) =>
         {
-            SetLowerPaneVisible(_settings.ShowLowerPane);
-            _lowerPane.Mode = _settings.LowerPaneMode;
-            Get<ComboBox>("PaneModeCombo").SelectedIndex = (int)_settings.LowerPaneMode;
+            SetLowerPaneVisible(_settings.Loaded.ShowLowerPane);
+            _lowerPane.Mode = _settings.Loaded.LowerPaneMode;
+            Get<ComboBox>("PaneModeCombo").SelectedIndex = (int)_settings.Loaded.LowerPaneMode;
 
             _sweep.Start();
         };
@@ -153,7 +153,7 @@ public partial class MainWindow : Window
         {
             _lifetime.Cancel();
             _enricher.Dispose();
-            SaveSettings();
+            _settings.SaveNow();
         };
     }
 
@@ -162,97 +162,61 @@ public partial class MainWindow : Window
 
     private void ApplySettings()
     {
-        _tree.SortColumn = _settings.SortColumn;
-        _tree.SortDescending = _settings.SortDescending;
-        _tree.NamePaneWidth = _settings.NamePaneWidth;
-        _list.HighlightNewAndDead = _settings.HighlightNewAndDead;
-        _sweep.IntervalSeconds = _settings.RefreshSeconds;
-        _confirmActions = _settings.ConfirmActions;
-        _columns.SetColumnSets(_settings.ColumnSets);
+        _tree.SortColumn = _settings.Loaded.SortColumn;
+        _tree.SortDescending = _settings.Loaded.SortDescending;
+        _tree.NamePaneWidth = _settings.Loaded.NamePaneWidth;
+        _list.HighlightNewAndDead = _settings.Loaded.HighlightNewAndDead;
+        _sweep.IntervalSeconds = _settings.Loaded.RefreshSeconds;
+        _confirmActions = _settings.Loaded.ConfirmActions;
+        _columns.SetColumnSets(_settings.Loaded.ColumnSets);
         ApplyOptions(
-            _settings.ConfirmActions,
-            _settings.HighlightSeconds,
-            ColorRuleSetting.ToRules(_settings.ColorRules)
+            _settings.Loaded.ConfirmActions,
+            _settings.Loaded.HighlightSeconds,
+            ColorRuleSetting.ToRules(_settings.Loaded.ColorRules)
         );
 
-        Width = _settings.WindowWidth;
-        Height = _settings.WindowHeight;
-        Topmost = _settings.AlwaysOnTop;
+        Width = _settings.Loaded.WindowWidth;
+        Height = _settings.Loaded.WindowHeight;
+        Topmost = _settings.Loaded.AlwaysOnTop;
 
-        Get<ToggleSwitch>("TreeToggle").IsChecked = _settings.TreeMode;
-        Get<MenuItem>("MenuTreeMode").IsChecked = _settings.TreeMode;
-        Get<MenuItem>("MenuHighlight").IsChecked = _settings.HighlightNewAndDead;
-        Get<MenuItem>("MenuAlwaysOnTop").IsChecked = _settings.AlwaysOnTop;
+        Get<ToggleSwitch>("TreeToggle").IsChecked = _settings.Loaded.TreeMode;
+        Get<MenuItem>("MenuTreeMode").IsChecked = _settings.Loaded.TreeMode;
+        Get<MenuItem>("MenuHighlight").IsChecked = _settings.Loaded.HighlightNewAndDead;
+        Get<MenuItem>("MenuAlwaysOnTop").IsChecked = _settings.Loaded.AlwaysOnTop;
         Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
 
         // The speed radio group has to agree with the interval that was restored,
         // or the menu claims one rate while the loop runs at another.
-        Get<MenuItem>("MenuSpeedFast").IsChecked = _settings.RefreshSeconds <= 0.5;
+        Get<MenuItem>("MenuSpeedFast").IsChecked = _settings.Loaded.RefreshSeconds <= 0.5;
         Get<MenuItem>("MenuSpeedNormal").IsChecked =
-            Math.Abs(_settings.RefreshSeconds - 1.0) < 0.01;
-        Get<MenuItem>("MenuSpeedSlow").IsChecked = Math.Abs(_settings.RefreshSeconds - 2.0) < 0.01;
-        Get<MenuItem>("MenuSpeedVerySlow").IsChecked = _settings.RefreshSeconds >= 5.0;
+            Math.Abs(_settings.Loaded.RefreshSeconds - 1.0) < 0.01;
+        Get<MenuItem>("MenuSpeedSlow").IsChecked =
+            Math.Abs(_settings.Loaded.RefreshSeconds - 2.0) < 0.01;
+        Get<MenuItem>("MenuSpeedVerySlow").IsChecked = _settings.Loaded.RefreshSeconds >= 5.0;
     }
 
-    /// <summary>
-    /// Queue a settings save, coalescing bursts.
-    /// </summary>
-    /// <remarks>
-    /// Saving only on window close loses everything if the app is killed or
-    /// crashes — and a process explorer is a tool people SIGTERM. Debounced so
-    /// that dragging a splitter does not write the file on every frame.
-    /// </remarks>
-    private void ScheduleSave()
-    {
-        _saveDebounce?.Cancel();
-        _saveDebounce = new CancellationTokenSource();
-        var token = _saveDebounce.Token;
-
-        _ = Task.Run(
-            async () =>
-            {
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(2), token).ConfigureAwait(false);
-                    await Dispatcher.UIThread.InvokeAsync(SaveSettings);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Superseded by a later change.
-                }
-            },
-            CancellationToken.None
-        );
-    }
-
-    private void SaveSettings()
-    {
-        SettingsStore.Save(
-            _settings with
-            {
-                Columns = [.. _columns.Columns.Select(c => c.Column)],
-                ColumnWidths = _columns.Columns.ToDictionary(
-                    c => c.Column.ToString(),
-                    c => c.Width
-                ),
-                SortColumn = _tree.SortColumn,
-                SortDescending = _tree.SortDescending,
-                TreeMode = Get<ToggleSwitch>("TreeToggle").IsChecked == true,
-                ShowLowerPane = Get<ContentControl>("LowerPaneHost").IsVisible,
-                LowerPaneMode = _lowerPane.Mode,
-                RefreshSeconds = _sweep.IntervalSeconds,
-                HighlightNewAndDead = _list.HighlightNewAndDead,
-                HighlightSeconds = _list.HighlightDuration.TotalSeconds,
-                ConfirmActions = _confirmActions,
-                ColorRules = ColorRuleSetting.FromRules(_colorRules),
-                ColumnSets = _columns.ColumnSets,
-                AlwaysOnTop = Topmost,
-                NamePaneWidth = _tree.NamePaneWidth,
-                WindowWidth = Width,
-                WindowHeight = Height,
-            }
-        );
-    }
+    /// <summary>Everything a save records, gathered from the live controls.</summary>
+    private AppSettings GatherSettings(AppSettings loaded) =>
+        loaded with
+        {
+            Columns = [.. _columns.Columns.Select(c => c.Column)],
+            ColumnWidths = _columns.Columns.ToDictionary(c => c.Column.ToString(), c => c.Width),
+            SortColumn = _tree.SortColumn,
+            SortDescending = _tree.SortDescending,
+            TreeMode = Get<ToggleSwitch>("TreeToggle").IsChecked == true,
+            ShowLowerPane = Get<ContentControl>("LowerPaneHost").IsVisible,
+            LowerPaneMode = _lowerPane.Mode,
+            RefreshSeconds = _sweep.IntervalSeconds,
+            HighlightNewAndDead = _list.HighlightNewAndDead,
+            HighlightSeconds = _list.HighlightDuration.TotalSeconds,
+            ConfirmActions = _confirmActions,
+            ColorRules = ColorRuleSetting.FromRules(_colorRules),
+            ColumnSets = _columns.ColumnSets,
+            AlwaysOnTop = Topmost,
+            NamePaneWidth = _tree.NamePaneWidth,
+            WindowWidth = Width,
+            WindowHeight = Height,
+        };
 
     // ---- Wiring -------------------------------------------------------------
 
@@ -269,7 +233,7 @@ public partial class MainWindow : Window
             Get<MenuItem>("MenuPaneModules").IsChecked = mode == LowerPaneMode.Modules;
             Get<MenuItem>("MenuPaneHandles").IsChecked = mode == LowerPaneMode.Handles;
             Get<MenuItem>("MenuPaneThreads").IsChecked = mode == LowerPaneMode.Threads;
-            ScheduleSave();
+            _settings.ScheduleSave();
         };
 
         WirePaneMode("MenuPaneModules", LowerPaneMode.Modules);
@@ -306,7 +270,7 @@ public partial class MainWindow : Window
         Get<ContentControl>("LowerPaneHost").IsVisible = visible;
         Get<ToggleButton>("LowerPaneToggle").IsChecked = visible;
         Get<MenuItem>("MenuLowerPane").IsChecked = visible;
-        ScheduleSave();
+        _settings.ScheduleSave();
 
         if (visible)
         {
@@ -336,7 +300,7 @@ public partial class MainWindow : Window
             _columns.AcceptLayout(columns);
             Get<Border>("ScrollGutter").Width = _tree.NamePaneWidth;
             SyncScrollBars();
-            ScheduleSave();
+            _settings.ScheduleSave();
         };
 
         _tree.ToggleRequested += (_, id) =>
@@ -365,7 +329,7 @@ public partial class MainWindow : Window
             }
 
             Rebuild();
-            ScheduleSave();
+            _settings.ScheduleSave();
         };
 
         _verticalScroll.Scroll += (_, _) => _tree.VerticalOffset = _verticalScroll.Value;
@@ -384,7 +348,7 @@ public partial class MainWindow : Window
         {
             Get<MenuItem>("MenuTreeMode").IsChecked = treeToggle.IsChecked == true;
             Rebuild();
-            ScheduleSave();
+            _settings.ScheduleSave();
         };
 
         BuildSparklines();
@@ -464,14 +428,14 @@ public partial class MainWindow : Window
         alwaysOnTop.Click += (_, _) =>
         {
             Topmost = alwaysOnTop.IsChecked;
-            ScheduleSave();
+            _settings.ScheduleSave();
         };
 
         var highlight = Get<MenuItem>("MenuHighlight");
         highlight.Click += (_, _) =>
         {
             _list.HighlightNewAndDead = highlight.IsChecked;
-            ScheduleSave();
+            _settings.ScheduleSave();
         };
 
         Get<MenuItem>("MenuInstallHelper").Click += (_, _) => _ = ShowHelperStatusAsync();
@@ -522,7 +486,7 @@ public partial class MainWindow : Window
             Get<MenuItem>(name).Click += (_, _) =>
             {
                 _sweep.IntervalSeconds = seconds;
-                ScheduleSave();
+                _settings.ScheduleSave();
             };
 
         void WireNice(string name, int nice) =>
@@ -954,7 +918,7 @@ public partial class MainWindow : Window
         {
             ApplyOptions(chosen.ConfirmActions, chosen.HighlightSeconds, chosen.ColorRules);
             Rebuild();
-            ScheduleSave();
+            _settings.ScheduleSave();
         }
     }
 

@@ -9,6 +9,7 @@ namespace Procexp.App.Tests;
 /// with anything an older version, a newer version, or a hand edit could leave
 /// behind.
 /// </summary>
+[Collection("settings")]
 public class SettingsStoreTests
 {
     [Fact]

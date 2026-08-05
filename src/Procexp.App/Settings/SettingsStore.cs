@@ -26,12 +26,12 @@ public sealed record ColorRuleSetting
 
     /// <summary>Apply saved overrides on top of the default legend.</summary>
     public static IReadOnlyList<ProcessColorRule> ToRules(
-        IReadOnlyList<ColorRuleSetting> overrides
+        IReadOnlyList<ColorRuleSetting>? overrides
     ) =>
         [
             .. ProcessColorRule.Defaults.Select(rule =>
             {
-                var saved = overrides.FirstOrDefault(o => o.Flag == rule.Flag.ToString());
+                var saved = (overrides ?? []).FirstOrDefault(o => o.Flag == rule.Flag.ToString());
                 if (saved is null)
                 {
                     return rule;
@@ -51,10 +51,10 @@ public sealed record ColorRuleSetting
     /// so a pristine settings file stays free of colour noise.
     /// </summary>
     public static IReadOnlyList<ColorRuleSetting> FromRules(
-        IReadOnlyList<ProcessColorRule> rules
+        IReadOnlyList<ProcessColorRule>? rules
     ) =>
         [
-            .. rules
+            .. (rules ?? [])
                 .Where(rule =>
                     ProcessColorRule.Defaults.FirstOrDefault(d => d.Flag == rule.Flag) != rule
                 )
@@ -169,7 +169,23 @@ public static class SettingsStore
             var json = File.ReadAllText(SettingsPath);
             var loaded = JsonSerializer.Deserialize(json, TypeInfo);
 
-            return loaded is null ? AppSettings.Defaults : Sanitise(loaded);
+            if (loaded is null)
+            {
+                return AppSettings.Defaults;
+            }
+
+            try
+            {
+                return Sanitise(loaded);
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+            {
+                // The repair itself failing means the file is stranger than
+                // anticipated. Starting with defaults beats not starting: the
+                // settings are a convenience, and this runs before there is a
+                // window to show an error in.
+                return AppSettings.Defaults;
+            }
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -206,17 +222,25 @@ public static class SettingsStore
     /// </remarks>
     private static AppSettings Sanitise(AppSettings settings)
     {
-        var columns = Columns_.Normalise(settings.Columns);
+        // A property absent from the file arrives null rather than as its
+        // initialiser, so every version meets nulls in the fields it added
+        // after the file was written. Repaired here, at the boundary, because
+        // the alternative is a null-check at every use for all time — and the
+        // one that gets forgotten crashes the app before a window exists to
+        // report it.
+        var columns = Columns_.Normalise(settings.Columns ?? []);
 
         return settings with
         {
             Columns = columns,
+            ColumnWidths = settings.ColumnWidths ?? new Dictionary<string, double>(),
+            ColorRules = settings.ColorRules ?? [],
             ColumnSets =
             [
-                .. settings.ColumnSets.Select(s =>
+                .. (settings.ColumnSets ?? []).Select(s =>
                     s with
                     {
-                        Columns = Columns_.Normalise(s.Columns),
+                        Columns = Columns_.Normalise(s.Columns ?? []),
                     }
                 ),
             ],

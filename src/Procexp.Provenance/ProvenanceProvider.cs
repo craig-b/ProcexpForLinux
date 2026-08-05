@@ -23,9 +23,12 @@ public sealed partial class ProvenanceProvider : IProvenanceProvider
     private readonly Lock _gate = new();
 
     public ProvenanceProvider(VirusTotalClient? virusTotal = null) =>
-        _virusTotal = virusTotal ?? new VirusTotalClient();
+        _virusTotal = virusTotal ?? VirusTotalClient.Shared;
 
     public PackageManagerKind PackageManager => _packages.Kind;
+
+    /// <summary>Whether VirusTotal lookups will actually go anywhere.</summary>
+    public bool VirusTotalConfigured => _virusTotal.HasApiKey;
 
     public ValueTask<ProvenanceInfo> ProvenanceAsync(
         string path,

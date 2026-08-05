@@ -37,6 +37,20 @@ public sealed class VirusTotalClient : IDisposable
     }
 
     /// <summary>
+    /// The process-wide client. The public API allows four requests a minute per
+    /// key; separate instances would each enforce that limit independently and
+    /// overrun it together.
+    /// </summary>
+    public static VirusTotalClient Shared { get; } = new();
+
+    /// <summary>
+    /// Whether an API key is configured. Checking is opt-in — no key, no network
+    /// traffic — and callers use this to say "not configured" rather than
+    /// rendering the same blank as "not yet checked".
+    /// </summary>
+    public bool HasApiKey => !string.IsNullOrEmpty(_apiKeyProvider());
+
+    /// <summary>
     /// Reputation for a hash, from cache when possible.
     /// </summary>
     /// <returns>

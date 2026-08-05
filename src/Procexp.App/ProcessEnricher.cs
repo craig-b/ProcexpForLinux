@@ -49,6 +49,9 @@ public sealed class ProcessEnricher : IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SemaphoreSlim _lookupSlots = new(2);
 
+    /// <summary>One image hashed at a time; see <see cref="QueueVirusTotalLookup"/>.</summary>
+    private readonly SemaphoreSlim _hashSlot = new(1);
+
     /// <summary>What we know about an image, once someone has looked.</summary>
     private sealed record ImageFacts(
         string? Description,
@@ -176,6 +179,11 @@ public sealed class ProcessEnricher : IDisposable
                         );
 
                         Updated?.Invoke(this, EventArgs.Empty);
+
+                        if (_provenance.VirusTotalConfigured)
+                        {
+                            QueueVirusTotalLookup(path, info);
+                        }
                     }
                     finally
                     {
@@ -189,6 +197,72 @@ public sealed class ProcessEnricher : IDisposable
                 finally
                 {
                     _pending.TryRemove(path, out _);
+                }
+            },
+            CancellationToken.None
+        );
+    }
+
+    /// <summary>
+    /// Check an image against VirusTotal in the background.
+    /// </summary>
+    /// <remarks>
+    /// Opt-in: runs only when an API key is configured, and sends nothing but the
+    /// SHA-256 — the file itself is never uploaded. Hashing is bounded to one
+    /// image at a time because a first sweep would otherwise hash every binary on
+    /// the system at once; the requests themselves are serialised behind the
+    /// client's four-a-minute limiter, so the column fills gradually and the
+    /// on-disk cache makes later sessions immediate.
+    /// </remarks>
+    private void QueueVirusTotalLookup(string path, ProvenanceInfo info)
+    {
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    await _hashSlot.WaitAsync(_lifetime.Token).ConfigureAwait(false);
+
+                    string? sha;
+                    try
+                    {
+                        sha = await ProvenanceProvider
+                            .ComputeSha256Async(path, _lifetime.Token)
+                            .ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _hashSlot.Release();
+                    }
+
+                    if (sha is null)
+                    {
+                        return;
+                    }
+
+                    var vt = await _provenance
+                        .VirusTotalAsync(sha, _lifetime.Token)
+                        .ConfigureAwait(false);
+
+                    if (vt is null || !_byPath.TryGetValue(path, out var facts))
+                    {
+                        return;
+                    }
+
+                    _byPath[path] = facts with
+                    {
+                        Provenance = info with { Sha256 = sha, VirusTotal = vt },
+                    };
+
+                    Updated?.Invoke(this, EventArgs.Empty);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Shutting down.
+                }
+                catch (ProviderException)
+                {
+                    // Network or quota trouble; the column simply stays blank.
                 }
             },
             CancellationToken.None
@@ -344,5 +418,6 @@ public sealed class ProcessEnricher : IDisposable
         _lifetime.Cancel();
         _lifetime.Dispose();
         _lookupSlots.Dispose();
+        _hashSlot.Dispose();
     }
 }

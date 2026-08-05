@@ -735,12 +735,70 @@ public sealed class ProcessPropertiesWindow : Window
             _provenanceDetail.Add("Note", error);
         }
 
-        if (info.VirusTotal is { } vt)
+        await LoadVirusTotalAsync(info).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Append the VirusTotal section, fetching the verdict if one is not cached.
+    /// </summary>
+    /// <remarks>
+    /// Only the SHA-256 is ever sent, and only when the user has configured an
+    /// API key. The distinct texts matter: "not configured", "checking",
+    /// "never seen" and "0 of 70" are four different facts, and collapsing any
+    /// two into a blank would misreport the file.
+    /// </remarks>
+    private async Task LoadVirusTotalAsync(ProvenanceInfo info)
+    {
+        _provenanceDetail.AddSection("VirusTotal");
+
+        if (!_provenance.VirusTotalConfigured)
         {
-            _provenanceDetail.AddSection("VirusTotal");
-            _provenanceDetail.Add("Detections", $"{vt.Positives} of {vt.Total}");
-            _provenanceDetail.Add("Checked", ValueFormat.DateTime(vt.CheckedAt));
-            _provenanceDetail.Add("Report", vt.Permalink);
+            _provenanceDetail.Add(
+                "Status",
+                "Not configured — set VIRUSTOTAL_API_KEY or put a key in "
+                    + "~/.config/procexp/virustotal.key to check hashes.",
+                showWhenEmpty: true
+            );
+            return;
         }
+
+        if (info.Sha256 is not { } sha)
+        {
+            _provenanceDetail.Add(
+                "Status",
+                "Image not readable, no hash to check.",
+                showWhenEmpty: true
+            );
+            return;
+        }
+
+        _provenanceDetail.Add("Status", "Checking...", showWhenEmpty: true);
+
+        string status;
+        VirusTotalResult? vt = null;
+        try
+        {
+            vt = await _provenance.VirusTotalAsync(sha, _lifetime.Token).ConfigureAwait(true);
+            status = vt is null ? "Never seen by VirusTotal." : "Checked.";
+        }
+        catch (ProviderException e)
+        {
+            status = e.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        _provenanceDetail.RemoveLast();
+        if (vt is null)
+        {
+            _provenanceDetail.Add("Status", status, showWhenEmpty: true);
+            return;
+        }
+
+        _provenanceDetail.Add("Detections", $"{vt.Positives} of {vt.Total}");
+        _provenanceDetail.Add("Checked", ValueFormat.DateTime(vt.CheckedAt));
+        _provenanceDetail.Add("Report", vt.Permalink);
     }
 }

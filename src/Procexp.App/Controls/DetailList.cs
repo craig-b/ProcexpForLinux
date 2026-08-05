@@ -75,6 +75,30 @@ public sealed class DetailList : UserControl
         _row++;
     }
 
+    /// <summary>
+    /// Remove the most recently added row, for replacing a provisional value —
+    /// a "Checking..." that has since resolved — without rebuilding the list.
+    /// </summary>
+    public void RemoveLast()
+    {
+        if (_row == 0)
+        {
+            return;
+        }
+
+        _row--;
+
+        for (var i = _grid.Children.Count - 1; i >= 0; i--)
+        {
+            if (Grid.GetRow(_grid.Children[i]) == _row)
+            {
+                _grid.Children.RemoveAt(i);
+            }
+        }
+
+        _grid.RowDefinitions.RemoveAt(_grid.RowDefinitions.Count - 1);
+    }
+
     /// <summary>Add a spacer and a heading, to group related rows.</summary>
     public void AddSection(string title)
     {

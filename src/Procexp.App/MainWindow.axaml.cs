@@ -303,6 +303,8 @@ public partial class MainWindow : Window
 
     private void WireTree()
     {
+        _tree.RowActivated += (_, _) => ShowProperties();
+
         _tree.SelectionChanged += (_, _) =>
         {
             UpdateStatus();

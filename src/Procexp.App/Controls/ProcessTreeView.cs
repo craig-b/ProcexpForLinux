@@ -35,6 +35,9 @@ public sealed class ProcessTreeView : VirtualTableBase
     public event EventHandler<ProcessId>? ToggleRequested;
     public event EventHandler<Column>? HeaderClicked;
 
+    /// <summary>Raised on double-click; the window opens Properties.</summary>
+    public event EventHandler? RowActivated;
+
     /// <summary>
     /// Raised when the user resizes a column or drags one to a new position.
     /// Carries the new layout, so the window can persist it.
@@ -482,6 +485,13 @@ public sealed class ProcessTreeView : VirtualTableBase
         }
 
         SetSelectedIndex(index);
+
+        // Left only: a fast double right-click should not drag Properties into
+        // what was meant as a context-menu gesture.
+        if (e.ClickCount == 2 && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            RowActivated?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void HandleHeaderClick(Point point)

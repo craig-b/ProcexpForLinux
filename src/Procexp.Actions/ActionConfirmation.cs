@@ -136,6 +136,56 @@ public static class ActionConfirmationPolicy
         };
     }
 
+    /// <summary>
+    /// Confirmation for an explicitly chosen signal from the Send Signal menu.
+    /// </summary>
+    /// <remarks>
+    /// The fatal signals get the full kill policy — SIGKILL from a submenu is no
+    /// less a kill for the different route — while the conventionally-handled
+    /// ones (HUP, USR1, USR2) usually mean "reload" or "toggle something" to the
+    /// receiver and warrant a lighter touch.
+    /// </remarks>
+    public static ActionConfirmation ForSignal(ProcessRecord process, int signal, string name)
+    {
+        var title = $"Send {name}";
+
+        // SIGKILL, SIGTERM and SIGINT end the process for anything that does not
+        // catch them; judge those exactly as a kill.
+        if (signal is 2 or 9 or 15)
+        {
+            return ForKill(process) with { Title = title };
+        }
+
+        if (process.Id.Pid == 1)
+        {
+            return new ActionConfirmation
+            {
+                Title = title,
+                Message = "pid 1 is the init process. Signalling it would halt the system.",
+                Severity = ConfirmationSeverity.Critical,
+                IsRefused = true,
+            };
+        }
+
+        // HUP is fatal by default to anything that has not installed a handler,
+        // so it cannot be waved through as routine.
+        var subject = $"{process.Name} (pid {process.Id.Pid})";
+        return new ActionConfirmation
+        {
+            Title = title,
+            Message =
+                $"Send {name} to {subject}? "
+                + (
+                    signal == 1
+                        ? "Daemons usually reload their configuration; anything without a handler dies."
+                        : "What it does depends entirely on the receiver; anything without a handler dies."
+                ),
+            Severity = CriticalNames.Contains(process.Name)
+                ? ConfirmationSeverity.Disruptive
+                : ConfirmationSeverity.Routine,
+        };
+    }
+
     public static ActionConfirmation ForSuspend(ProcessRecord process)
     {
         if (process.Id.Pid == 1 || CriticalNames.Contains(process.Name))

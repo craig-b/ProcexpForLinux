@@ -45,6 +45,18 @@ public sealed class ActionCoordinator(Window owner, Func<bool> confirmActions)
                 .ConfigureAwait(false);
             return true;
         },
+        PrivilegedSetAffinity = static async (id, mask, cancellationToken) =>
+        {
+            if (!PrivilegedClient.IsAvailable)
+            {
+                return false;
+            }
+
+            await new PrivilegedClient()
+                .SetAffinityAsync(id, mask, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        },
     };
 
     public async Task KillAsync(ProcessRecord process, bool tree, ProcessSnapshot snapshot)
@@ -85,6 +97,48 @@ public sealed class ActionCoordinator(Window owner, Func<bool> confirmActions)
 
     public Task SetNiceAsync(ProcessRecord process, int nice) =>
         RunAsync(() => _actions.SetNiceAsync(process.Id, nice), "Set Priority", process);
+
+    public async Task SendSignalAsync(ProcessRecord process, int signal)
+    {
+        var name = Signals.Name(signal);
+        var confirmation = ActionConfirmationPolicy.ForSignal(process, signal, name);
+        if (!await Confirm(confirmation).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        await RunAsync(() => _actions.SignalAsync(process.Id, signal), $"Send {name}", process);
+    }
+
+    public IReadOnlyList<int>? GetAffinity(ProcessRecord process) =>
+        _actions.GetAffinity(process.Id);
+
+    public Task SetAffinityAsync(ProcessRecord process, IReadOnlyList<int> cpus) =>
+        RunAsync(() => _actions.SetAffinityAsync(process.Id, cpus), "Set Affinity", process);
+
+    /// <summary>
+    /// Write a core dump and confirm where it landed.
+    /// </summary>
+    /// <remarks>
+    /// No confirmation on the way in — reading a process is not disruptive the
+    /// way signalling one is — but the success is reported, because the artefact
+    /// is the whole point and it landed wherever the picker was aimed.
+    /// </remarks>
+    public async Task CreateDumpAsync(ProcessRecord process, string path)
+    {
+        var succeeded = await RunAsync(
+            () => _actions.CreateDumpAsync(process, path),
+            "Create Dump",
+            process
+        );
+
+        if (succeeded)
+        {
+            await ConfirmationDialog
+                .ShowMessageAsync(owner, "Create Dump", $"Dump written to {path}.")
+                .ConfigureAwait(true);
+        }
+    }
 
     public async Task RestartAsync(ProcessRecord process, ProcessSnapshot snapshot)
     {
@@ -129,11 +183,12 @@ public sealed class ActionCoordinator(Window owner, Func<bool> confirmActions)
     /// exited while the dialog was open, or it belongs to another user — so they
     /// are reported in those terms rather than as errors.
     /// </remarks>
-    private async Task RunAsync(Func<Task> action, string title, ProcessRecord process)
+    private async Task<bool> RunAsync(Func<Task> action, string title, ProcessRecord process)
     {
         try
         {
             await action().ConfigureAwait(true);
+            return true;
         }
         catch (ProviderException e)
         {
@@ -157,6 +212,7 @@ public sealed class ActionCoordinator(Window owner, Func<bool> confirmActions)
             await ConfirmationDialog
                 .ShowMessageAsync(owner, title, explanation)
                 .ConfigureAwait(true);
+            return false;
         }
     }
 }

@@ -76,4 +76,57 @@ public sealed class SelectionActions(
             await refresh().ConfigureAwait(true);
         }
     }
+
+    public async Task SendSignalAsync(int signal)
+    {
+        if (Actionable() is { } process)
+        {
+            await _coordinator.SendSignalAsync(process, signal).ConfigureAwait(true);
+            await refresh().ConfigureAwait(true);
+        }
+    }
+
+    public async Task SetAffinityAsync()
+    {
+        if (Actionable() is not { } process)
+        {
+            return;
+        }
+
+        // An unreadable mask (the process died) degenerates to nothing checked,
+        // which the dialog's OK-gating turns into a forced explicit choice.
+        var current = _coordinator.GetAffinity(process) ?? [];
+        var chosen = await Dialogs
+            .AffinityDialog.ShowAsync(owner, process, current)
+            .ConfigureAwait(true);
+
+        if (chosen is not null)
+        {
+            await _coordinator.SetAffinityAsync(process, chosen).ConfigureAwait(true);
+            await refresh().ConfigureAwait(true);
+        }
+    }
+
+    public async Task CreateDumpAsync()
+    {
+        if (Actionable() is not { } process)
+        {
+            return;
+        }
+
+        var file = await owner
+            .StorageProvider.SaveFilePickerAsync(
+                new()
+                {
+                    Title = "Create Dump",
+                    SuggestedFileName = $"{process.Name}-{process.Id.Pid}.core",
+                }
+            )
+            .ConfigureAwait(true);
+
+        if (file?.Path.LocalPath is { Length: > 0 } path)
+        {
+            await _coordinator.CreateDumpAsync(process, path).ConfigureAwait(true);
+        }
+    }
 }

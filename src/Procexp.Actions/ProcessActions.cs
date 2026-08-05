@@ -11,9 +11,26 @@ public static class Signals
     public const int Hup = 1;
     public const int Int = 2;
     public const int Kill = 9;
+    public const int Usr1 = 10;
+    public const int Usr2 = 12;
     public const int Term = 15;
     public const int Cont = 18;
     public const int Stop = 19;
+
+    /// <summary>Conventional name for a signal number, for dialogs and menus.</summary>
+    public static string Name(int signal) =>
+        signal switch
+        {
+            Hup => "SIGHUP",
+            Int => "SIGINT",
+            Kill => "SIGKILL",
+            Usr1 => "SIGUSR1",
+            Usr2 => "SIGUSR2",
+            Term => "SIGTERM",
+            Cont => "SIGCONT",
+            Stop => "SIGSTOP",
+            _ => $"signal {signal}",
+        };
 }
 
 /// <summary>
@@ -41,6 +58,15 @@ public sealed partial class ProcessActions
 
     /// <summary>As <see cref="PrivilegedSignal"/>, for renice.</summary>
     public Func<ProcessId, int, CancellationToken, Task<bool>>? PrivilegedSetNice { get; init; }
+
+    /// <summary>As <see cref="PrivilegedSignal"/>, for CPU affinity. The byte
+    /// array is the raw cpu_set_t mask.</summary>
+    public Func<
+        ProcessId,
+        byte[],
+        CancellationToken,
+        Task<bool>
+    >? PrivilegedSetAffinity { get; init; }
 
     /// <summary>
     /// Confirm that the PID still hosts the same process the caller selected.
@@ -325,6 +351,249 @@ public sealed partial class ProcessActions
         return value == -1 && Marshal.GetLastPInvokeError() != 0 ? null : value;
     }
 
+    // ---- CPU affinity -------------------------------------------------------
+
+    /// <summary>
+    /// The size of the mask handed to the affinity syscalls: 1024 bits, the
+    /// kernel's own CPU_SETSIZE, so machines beyond 64 CPUs are covered.
+    /// </summary>
+    private const int CpuSetBytes = 128;
+
+    /// <summary>The CPUs a process is allowed to run on, or null when unreadable.</summary>
+    public IReadOnlyList<int>? GetAffinity(ProcessId id)
+    {
+        var mask = new byte[CpuSetBytes];
+        if (SchedGetAffinity(id.Pid, (nuint)mask.Length, mask) != 0)
+        {
+            return null;
+        }
+
+        var cpus = new List<int>();
+        for (var cpu = 0; cpu < mask.Length * 8; cpu++)
+        {
+            if ((mask[cpu / 8] & (1 << (cpu % 8))) != 0)
+            {
+                cpus.Add(cpu);
+            }
+        }
+
+        return cpus;
+    }
+
+    /// <summary>
+    /// Pin a process to a set of CPUs.
+    /// </summary>
+    /// <remarks>
+    /// Affinity is per-thread on Linux, but <c>sched_setaffinity</c> on the
+    /// process id applies to the main thread and the kernel migrates the rest
+    /// only when the caller asks per-tid — so this walks every tid, matching
+    /// what taskset -a does and what the Windows tool means by process affinity.
+    /// </remarks>
+    public async Task SetAffinityAsync(
+        ProcessId id,
+        IReadOnlyList<int> cpus,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (cpus.Count == 0)
+        {
+            throw ProviderException.Unsupported("at least one CPU must be selected");
+        }
+
+        var mask = new byte[CpuSetBytes];
+        foreach (var cpu in cpus)
+        {
+            if (cpu < 0 || cpu >= mask.Length * 8)
+            {
+                throw ProviderException.Unsupported($"no such CPU: {cpu}");
+            }
+
+            mask[cpu / 8] |= (byte)(1 << (cpu % 8));
+        }
+
+        VerifyIdentity(id);
+
+        try
+        {
+            SetAffinityAllThreads(id, mask);
+        }
+        catch (ProviderException e)
+            when (e.Kind == ProviderErrorKind.NotPermitted && PrivilegedSetAffinity is not null)
+        {
+            if (!await PrivilegedSetAffinity(id, mask, cancellationToken).ConfigureAwait(false))
+            {
+                throw;
+            }
+        }
+    }
+
+    /// <summary>Apply a mask to every thread of a process; shared with the helper.</summary>
+    public static void SetAffinityAllThreads(ProcessId id, byte[] mask)
+    {
+        string[] tids;
+        try
+        {
+            tids = Directory.GetDirectories($"/proc/{id.Pid}/task");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            throw ProviderException.ProcessGone(id);
+        }
+
+        ProviderException? firstFailure = null;
+        foreach (var tidDirectory in tids)
+        {
+            if (!int.TryParse(Path.GetFileName(tidDirectory), out var tid))
+            {
+                continue;
+            }
+
+            if (SchedSetAffinity(tid, (nuint)mask.Length, mask) != 0)
+            {
+                var errno = Marshal.GetLastPInvokeError();
+
+                // A thread exiting mid-walk is expected; the rest still count.
+                if (errno != 3) // ESRCH
+                {
+                    firstFailure ??= errno switch
+                    {
+                        1 => ProviderException.NotPermitted(
+                            $"not permitted to set the affinity of pid {id.Pid}"
+                        ),
+                        22 => ProviderException.Unsupported(
+                            "no selected CPU is present on this system"
+                        ),
+                        _ => new ProviderException(
+                            ProviderErrorKind.Underlying,
+                            $"sched_setaffinity failed with errno {errno}"
+                        ),
+                    };
+                }
+            }
+        }
+
+        if (firstFailure is not null)
+        {
+            throw firstFailure;
+        }
+    }
+
+    // ---- Core dumps ---------------------------------------------------------
+
+    /// <summary>
+    /// Write a core dump of a running process without stopping it permanently.
+    /// </summary>
+    /// <remarks>
+    /// Delegates to gcore from gdb rather than reimplementing a core writer —
+    /// ptrace attach, memory-map walking and ELF note layout are gdb's home
+    /// ground, and a dump produced by gcore is loadable by every tool that
+    /// matters. The trade-offs are a dependency the error message names, and
+    /// gdb briefly stopping the target while it reads memory.
+    ///
+    /// Yama's ptrace_scope=1 — the default on most desktop distributions —
+    /// blocks attaching even to your own processes unless they are descendants,
+    /// so the permission failure explains that rather than blaming ownership.
+    /// </remarks>
+    public async Task<string> CreateDumpAsync(
+        ProcessRecord record,
+        string outputPath,
+        CancellationToken cancellationToken = default
+    )
+    {
+        VerifyIdentity(record.Id);
+
+        // gcore appends ".<pid>" to whatever prefix it is given; using a prefix
+        // in the target directory and renaming afterwards lets the caller pick
+        // an exact file name.
+        var prefix = Path.Combine(
+            Path.GetDirectoryName(outputPath) ?? ".",
+            $".procexp-dump-{record.Id.Pid}"
+        );
+        var produced = $"{prefix}.{record.Id.Pid}";
+
+        ProcessStartInfo startInfo = new("gcore")
+        {
+            ArgumentList = { "-o", prefix, record.Id.Pid.ToString() },
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        Process gcore;
+        try
+        {
+            gcore =
+                Process.Start(startInfo)
+                ?? throw new ProviderException(ProviderErrorKind.Underlying, "gcore did not start");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw ProviderException.Unsupported(
+                "creating a dump requires gcore, which ships with gdb — install gdb and retry"
+            );
+        }
+
+        using (gcore)
+        {
+            var stderr = await gcore
+                .StandardError.ReadToEndAsync(cancellationToken)
+                .ConfigureAwait(false);
+            await gcore.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (gcore.ExitCode != 0 || !File.Exists(produced))
+            {
+                TryDelete(produced);
+
+                // Underlying rather than NotPermitted: the coordinator's generic
+                // not-permitted text prescribes the helper, which cannot help
+                // here, so the specific message must survive to the dialog.
+                throw new ProviderException(
+                    ProviderErrorKind.Underlying,
+                    stderr.Contains("Operation not permitted", StringComparison.Ordinal)
+                        ? "the kernel refused to attach. With kernel.yama.ptrace_scope=1 — the "
+                            + "default on most distributions — even your own processes cannot be "
+                            + "dumped unless they are children of the debugger; a root shell "
+                            + "running gcore directly is the usual answer"
+                        : $"gcore failed: {Summarise(stderr)}"
+                );
+            }
+        }
+
+        try
+        {
+            File.Move(produced, outputPath, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            TryDelete(produced);
+            throw new ProviderException(
+                ProviderErrorKind.Underlying,
+                $"could not move the dump to {outputPath}: {e.Message}"
+            );
+        }
+
+        return outputPath;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort cleanup of a temp file.
+        }
+    }
+
+    /// <summary>The informative tail of gcore's stderr, which leads with noise.</summary>
+    private static string Summarise(string stderr)
+    {
+        var lines = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return lines.Length > 0 ? lines[^1].Trim() : "no error output";
+    }
+
     /// <summary>
     /// Terminate a process and start its command line again.
     /// </summary>
@@ -425,4 +694,10 @@ public sealed partial class ProcessActions
 
     [LibraryImport("libc", EntryPoint = "getpriority", SetLastError = true)]
     private static partial int GetPriority(int which, uint who);
+
+    [LibraryImport("libc", EntryPoint = "sched_getaffinity", SetLastError = true)]
+    private static partial int SchedGetAffinity(int pid, nuint cpusetsize, [Out] byte[] mask);
+
+    [LibraryImport("libc", EntryPoint = "sched_setaffinity", SetLastError = true)]
+    private static partial int SchedSetAffinity(int pid, nuint cpusetsize, byte[] mask);
 }

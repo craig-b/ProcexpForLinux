@@ -329,6 +329,40 @@ public sealed class PrivilegedClient
         }
     }
 
+    /// <summary>Set the CPU affinity of a process we do not own.</summary>
+    public async Task SetAffinityAsync(
+        ProcessId id,
+        byte[] mask,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var response = await SendAsync(
+                new HelperRequest
+                {
+                    Operation = HelperOperation.SetAffinity,
+                    Pid = id.Pid,
+                    StartTime = id.StartTime,
+                    Mask = Convert.ToHexString(mask),
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        if (!response.Ok)
+        {
+            throw new ProviderException(
+                ProviderErrorKind.Underlying,
+                response.Error switch
+                {
+                    "unknown operation" => "the installed helper predates affinity control — "
+                        + "reinstall it and 'systemctl restart procexp-helper'",
+                    { } error => error,
+                    null => "helper refused the request",
+                }
+            );
+        }
+    }
+
     private static async Task<HelperResponse> SendAsync(
         HelperRequest request,
         CancellationToken cancellationToken

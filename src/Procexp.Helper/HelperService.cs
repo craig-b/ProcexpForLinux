@@ -211,6 +211,7 @@ internal sealed partial class HelperService(Action<string> log)
             HelperOperation.Signal => SendSignal(request, peer),
             HelperOperation.SetNice => SetNice(request, peer),
             HelperOperation.ReadThreadKernelStack => ReadThreadKernelStack(request, peer),
+            HelperOperation.SetAffinity => SetAffinity(request, peer),
             _ => HelperResponse.Failure("unknown operation"),
         };
     }
@@ -355,9 +356,10 @@ internal sealed partial class HelperService(Action<string> log)
 
     private HelperResponse SendSignal(HelperRequest request, PeerCredentials peer)
     {
-        // A closed set: enough to control a process, not enough to be a general
-        // signal-injection primitive.
-        if (request.Signal is not (1 or 2 or 9 or 15 or 18 or 19))
+        // A closed set: enough to control a process — including the two
+        // user-defined signals daemons conventionally treat as control knobs —
+        // not enough to be a general signal-injection primitive.
+        if (request.Signal is not (1 or 2 or 9 or 10 or 12 or 15 or 18 or 19))
         {
             return HelperResponse.Failure($"signal {request.Signal} is not permitted");
         }
@@ -374,6 +376,42 @@ internal sealed partial class HelperService(Action<string> log)
             return HelperResponse.Failure(
                 $"kill failed with errno {Marshal.GetLastPInvokeError()}"
             );
+        }
+
+        return HelperResponse.Success();
+    }
+
+    private HelperResponse SetAffinity(HelperRequest request, PeerCredentials peer)
+    {
+        // 128 bytes is CPU_SETSIZE; anything else is not a mask this kernel
+        // interface produces, so reject it rather than guess.
+        byte[] mask;
+        try
+        {
+            mask = Convert.FromHexString(request.Mask ?? "");
+        }
+        catch (FormatException)
+        {
+            return HelperResponse.Failure("affinity mask is not valid hex");
+        }
+
+        if (mask.Length != 128 || mask.All(b => b == 0))
+        {
+            return HelperResponse.Failure("affinity mask must be 128 bytes with a bit set");
+        }
+
+        log($"uid {peer.Uid} (pid {peer.Pid}) set the affinity of pid {request.Pid}");
+
+        try
+        {
+            Actions.ProcessActions.SetAffinityAllThreads(
+                new ProcessId(request.Pid, request.StartTime),
+                mask
+            );
+        }
+        catch (ProviderException e)
+        {
+            return HelperResponse.Failure(e.Message);
         }
 
         return HelperResponse.Success();

@@ -132,6 +132,18 @@
                 <MenuItem Name="MenuResume" Header="_Resume" />
                 <MenuItem Name="MenuRestart" Header="Res_tart" />
                 <Separator />
+                <MenuItem Header="Send Si_gnal">
+                    <MenuItem Name="MenuSigHup" Header="SIGHUP (reload)" />
+                    <MenuItem Name="MenuSigInt" Header="SIGINT (interrupt)" />
+                    <MenuItem Name="MenuSigTerm" Header="SIGTERM (terminate)" />
+                    <MenuItem Name="MenuSigKill" Header="SIGKILL (cannot be caught)" />
+                    <Separator />
+                    <MenuItem Name="MenuSigUsr1" Header="SIGUSR1" />
+                    <MenuItem Name="MenuSigUsr2" Header="SIGUSR2" />
+                </MenuItem>
+                <MenuItem Name="MenuAffinity" Header="Set Affinit_y..." />
+                <MenuItem Name="MenuCreateDump" Header="Create _Dump..." />
+                <Separator />
                 <MenuItem Header="Set _Priority">
                     <MenuItem Name="MenuNiceHighest" Header="Highest (nice -20)" />
                     <MenuItem Name="MenuNiceHigh" Header="Above Normal (nice -5)" />

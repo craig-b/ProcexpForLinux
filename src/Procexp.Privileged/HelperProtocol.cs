@@ -69,6 +69,9 @@ public enum HelperOperation
     /// behind CAP_SYS_ADMIN, so not even the owning user can read it directly.
     /// </remarks>
     ReadThreadKernelStack,
+
+    /// <summary>Pin another user's process to a set of CPUs.</summary>
+    SetAffinity,
 }
 
 /// <summary>One request. Serialised as a single line of JSON.</summary>
@@ -101,6 +104,10 @@ public sealed record HelperRequest
     /// <summary>Thread id, for the per-thread operations.</summary>
     [JsonPropertyName("tid")]
     public int Tid { get; init; }
+
+    /// <summary>CPU affinity mask as hex-encoded cpu_set_t bytes.</summary>
+    [JsonPropertyName("mask")]
+    public string? Mask { get; init; }
 }
 
 /// <summary>One response.</summary>

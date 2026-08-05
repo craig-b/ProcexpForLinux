@@ -8,6 +8,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Procexp.Actions;
 using Procexp.App.Controls;
 using Procexp.App.Dialogs;
 using Procexp.App.Settings;
@@ -518,6 +519,16 @@ public partial class MainWindow : Window
         WireNice("MenuNiceLow", 5);
         WireNice("MenuNiceLowest", 19);
 
+        WireSignal("MenuSigHup", Signals.Hup);
+        WireSignal("MenuSigInt", Signals.Int);
+        WireSignal("MenuSigTerm", Signals.Term);
+        WireSignal("MenuSigKill", Signals.Kill);
+        WireSignal("MenuSigUsr1", Signals.Usr1);
+        WireSignal("MenuSigUsr2", Signals.Usr2);
+
+        Get<MenuItem>("MenuAffinity").Click += (_, _) => _ = _actions.SetAffinityAsync();
+        Get<MenuItem>("MenuCreateDump").Click += (_, _) => _ = _actions.CreateDumpAsync();
+
         Get<MenuItem>("MenuAbout").Click += (_, _) => ShowAbout();
         Get<MenuItem>("MenuProperties").Click += (_, _) => ShowProperties();
         Get<MenuItem>("MenuSystemInfo").Click += (_, _) => ShowSystemInfo();
@@ -540,6 +551,9 @@ public partial class MainWindow : Window
 
         void WireNice(string name, int nice) =>
             Get<MenuItem>(name).Click += (_, _) => _ = _actions.SetNiceAsync(nice);
+
+        void WireSignal(string name, int signal) =>
+            Get<MenuItem>(name).Click += (_, _) => _ = _actions.SendSignalAsync(signal);
     }
 
     private void WireContextMenu()

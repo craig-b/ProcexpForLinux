@@ -8,5 +8,6 @@
         <ProjectReference Include="../Procexp.Model/Procexp.Model.csproj" />
         <ProjectReference Include="../Procexp.Sampling/Procexp.Sampling.csproj" />
         <ProjectReference Include="../Procexp.Privileged/Procexp.Privileged.csproj" />
+        <ProjectReference Include="../Procexp.Actions/Procexp.Actions.csproj" />
     </ItemGroup>
 </Project>

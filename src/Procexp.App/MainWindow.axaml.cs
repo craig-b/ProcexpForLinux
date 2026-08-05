@@ -72,8 +72,7 @@ public partial class MainWindow : Window
     /// </summary>
     private readonly ProcessEnricher _enricher = new();
 
-    private bool _paused;
-    private double _intervalSeconds = 1.0;
+    private readonly SweepController _sweep = null!;
     private string _filter = "";
     private bool _confirmActions = true;
     private IReadOnlyList<ProcessColorRule> _colorRules = ProcessColorRule.Defaults;
@@ -82,8 +81,7 @@ public partial class MainWindow : Window
     private bool _enrichmentDirty;
     private CancellationTokenSource? _saveDebounce;
 
-    private readonly Queue<double> _sweepTimes = new();
-    private readonly Queue<double> _layoutTimes = new();
+    private readonly RollingAverage _layoutTimes = new();
 
     private IReadOnlyList<(Column Column, double Width)> _columns = [];
 
@@ -92,6 +90,7 @@ public partial class MainWindow : Window
         AvaloniaXamlLoader.Load(this);
 
         _actions = new ActionCoordinator(this, () => _confirmActions);
+        _sweep = new SweepController(_sampler, ApplySnapshot, OnHighlightTick, _lifetime.Token);
         _tree = Get<ProcessTreeView>("Tree");
         _verticalScroll = Get<ScrollBar>("VerticalScroll");
         _horizontalScroll = Get<ScrollBar>("HorizontalScroll");
@@ -139,8 +138,7 @@ public partial class MainWindow : Window
             _lowerPane.Mode = _settings.LowerPaneMode;
             Get<ComboBox>("PaneModeCombo").SelectedIndex = (int)_settings.LowerPaneMode;
 
-            _ = RunSamplingLoopAsync();
-            _ = RunHighlightTickerAsync();
+            _sweep.Start();
         };
 
         Closed += (_, _) =>
@@ -187,7 +185,7 @@ public partial class MainWindow : Window
         _tree.SortDescending = _settings.SortDescending;
         _tree.NamePaneWidth = _settings.NamePaneWidth;
         _list.HighlightNewAndDead = _settings.HighlightNewAndDead;
-        _intervalSeconds = _settings.RefreshSeconds;
+        _sweep.IntervalSeconds = _settings.RefreshSeconds;
         _confirmActions = _settings.ConfirmActions;
         _columnSets = _settings.ColumnSets;
         ApplyOptions(
@@ -258,7 +256,7 @@ public partial class MainWindow : Window
                 TreeMode = Get<ToggleSwitch>("TreeToggle").IsChecked == true,
                 ShowLowerPane = Get<ContentControl>("LowerPaneHost").IsVisible,
                 LowerPaneMode = _lowerPane.Mode,
-                RefreshSeconds = _intervalSeconds,
+                RefreshSeconds = _sweep.IntervalSeconds,
                 HighlightNewAndDead = _list.HighlightNewAndDead,
                 HighlightSeconds = _list.HighlightDuration.TotalSeconds,
                 ConfirmActions = _confirmActions,
@@ -393,7 +391,7 @@ public partial class MainWindow : Window
     private void WireToolbar()
     {
         Get<Button>("PauseButton").Click += (_, _) => TogglePause();
-        Get<Button>("RefreshButton").Click += (_, _) => _ = RefreshNowAsync();
+        Get<Button>("RefreshButton").Click += (_, _) => _ = _sweep.RefreshNowAsync();
         Get<Button>("KillButton").Click += (_, _) => _ = KillSelectedAsync(tree: false);
         Get<Button>("SuspendButton").Click += (_, _) => _ = SuspendSelectedAsync();
 
@@ -455,7 +453,7 @@ public partial class MainWindow : Window
             spark.IsDarkMode = dark;
             spark.AddSeries(colour);
             spark.FormatValue = format;
-            spark.SecondsPerSample = _intervalSeconds;
+            spark.SecondsPerSample = _sweep.IntervalSeconds;
 
             // The graph is 74 pixels wide; a title drawn over it would leave
             // room for nothing else, so the name lives in the tooltip.
@@ -497,7 +495,7 @@ public partial class MainWindow : Window
         var pause = Get<MenuItem>("MenuPause");
         pause.Click += (_, _) => SetPaused(pause.IsChecked);
 
-        Get<MenuItem>("MenuRefreshNow").Click += (_, _) => _ = RefreshNowAsync();
+        Get<MenuItem>("MenuRefreshNow").Click += (_, _) => _ = _sweep.RefreshNowAsync();
 
         var treeMode = Get<MenuItem>("MenuTreeMode");
         treeMode.Click += (_, _) =>
@@ -536,7 +534,7 @@ public partial class MainWindow : Window
         void WireSpeed(string name, double seconds) =>
             Get<MenuItem>(name).Click += (_, _) =>
             {
-                _intervalSeconds = seconds;
+                _sweep.IntervalSeconds = seconds;
                 ScheduleSave();
             };
 
@@ -604,141 +602,72 @@ public partial class MainWindow : Window
 
     // ---- Sampling -----------------------------------------------------------
 
-    private async Task RunSamplingLoopAsync()
+    /// <summary>
+    /// What a fresh snapshot does to the window. Called by the sweep controller
+    /// on the UI thread.
+    /// </summary>
+    private void ApplySnapshot(ProcessSnapshot snapshot)
     {
-        while (!_lifetime.IsCancellationRequested)
-        {
-            if (!_paused)
-            {
-                await SampleOnceAsync().ConfigureAwait(false);
-            }
+        _list.Apply(_enricher.Enrich(snapshot), DateTimeOffset.Now);
+        Rebuild();
 
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(_intervalSeconds), _lifetime.Token)
-                    .ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-        }
-    }
-
-    private async Task SampleOnceAsync()
-    {
-        var watch = Stopwatch.StartNew();
-        ProcessSnapshot snapshot;
-
-        try
+        if (Get<ContentControl>("LowerPaneHost").IsVisible)
         {
-            snapshot = await _sampler.SnapshotAsync(_lifetime.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
+            _ = _lowerPane.ReloadAsync();
         }
 
-        var sweep = watch.Elapsed.TotalMilliseconds;
+        _systemInfo?.SetProcessCounts(snapshot.Processes.Count, snapshot.System.ThreadCount);
 
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        var system = snapshot.System;
+        _cpuSpark.Append(system.CpuTotalPercent);
+        _memorySpark.Append(
+            system.MemoryTotal > 0 ? system.MemoryUsed * 100.0 / system.MemoryTotal : 0
+        );
+        _ioSpark.Append(system.DiskBytesPerSec);
+
+        // Who was busiest this second, for the System Information graphs'
+        // hover readout. Computed only while that window is open.
+        if (_systemInfo is { } info)
         {
-            Record(_sweepTimes, sweep);
-            _list.Apply(_enricher.Enrich(snapshot), DateTimeOffset.Now);
-            Rebuild();
+            var byCpu = snapshot
+                .Processes.Values.OrderByDescending(p => p.CpuPercent)
+                .FirstOrDefault();
+            var byMemory = snapshot
+                .Processes.Values.OrderByDescending(p => p.ResidentSize)
+                .FirstOrDefault();
 
-            if (Get<ContentControl>("LowerPaneHost").IsVisible)
-            {
-                _ = _lowerPane.ReloadAsync();
-            }
-
-            _systemInfo?.SetProcessCounts(snapshot.Processes.Count, snapshot.System.ThreadCount);
-
-            var system = snapshot.System;
-            _cpuSpark.Append(system.CpuTotalPercent);
-            _memorySpark.Append(
-                system.MemoryTotal > 0 ? system.MemoryUsed * 100.0 / system.MemoryTotal : 0
+            info.RecordTopConsumers(
+                byCpu is { CpuPercent: > 0.5 } ? $"{byCpu.Name} — {byCpu.CpuPercent:F0}%" : null,
+                byMemory is not null
+                    ? $"{byMemory.Name} — {ValueFormat.Bytes(byMemory.ResidentSize)}"
+                    : null
             );
-            _ioSpark.Append(system.DiskBytesPerSec);
-
-            // Who was busiest this second, for the System Information graphs'
-            // hover readout. Computed only while that window is open.
-            if (_systemInfo is { } info)
-            {
-                var byCpu = snapshot
-                    .Processes.Values.OrderByDescending(p => p.CpuPercent)
-                    .FirstOrDefault();
-                var byMemory = snapshot
-                    .Processes.Values.OrderByDescending(p => p.ResidentSize)
-                    .FirstOrDefault();
-
-                info.RecordTopConsumers(
-                    byCpu is { CpuPercent: > 0.5 }
-                        ? $"{byCpu.Name} — {byCpu.CpuPercent:F0}%"
-                        : null,
-                    byMemory is not null
-                        ? $"{byMemory.Name} — {ValueFormat.Bytes(byMemory.ResidentSize)}"
-                        : null
-                );
-            }
-        });
+        }
     }
 
     /// <summary>
-    /// Fades highlights out between sweeps.
+    /// The 250 ms tick between sweeps. Repaints only when a highlight actually
+    /// expired or enrichment arrived.
     /// </summary>
-    /// <remarks>
-    /// Runs faster than the sampling interval so a one-second tint does not
-    /// linger for a whole slow refresh cycle. It repaints only when something
-    /// actually expired.
-    /// </remarks>
-    private async Task RunHighlightTickerAsync()
+    private void OnHighlightTick()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
+        var now = DateTimeOffset.Now;
 
-        try
+        if (_list.Tick(now) || _enrichmentDirty)
         {
-            while (await timer.WaitForNextTickAsync(_lifetime.Token).ConfigureAwait(false))
-            {
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var now = DateTimeOffset.Now;
-
-                    if (_list.Tick(now) || _enrichmentDirty)
-                    {
-                        _enrichmentDirty = false;
-                        _list.Apply(_enricher.Enrich(_list.Current), now);
-                        Rebuild();
-                    }
-
-                    _lowerPane.Tick(now);
-                });
-            }
+            _enrichmentDirty = false;
+            _list.Apply(_enricher.Enrich(_list.Current), now);
+            Rebuild();
         }
-        catch (OperationCanceledException)
-        {
-            // Window closed.
-        }
+
+        _lowerPane.Tick(now);
     }
 
-    private async Task RefreshNowAsync()
-    {
-        if (!_paused)
-        {
-            await SampleOnceAsync().ConfigureAwait(true);
-            return;
-        }
-
-        // Refreshing while paused takes one sample without resuming, which is
-        // how Process Explorer's Update Now behaves.
-        await SampleOnceAsync().ConfigureAwait(true);
-    }
-
-    private void TogglePause() => SetPaused(!_paused);
+    private void TogglePause() => SetPaused(!_sweep.Paused);
 
     private void SetPaused(bool paused)
     {
-        _paused = paused;
+        _sweep.Paused = paused;
         Get<Button>("PauseButton").Content = paused ? "Resume" : "Pause";
         Get<MenuItem>("MenuPause").IsChecked = paused;
         UpdateStatus();
@@ -760,7 +689,7 @@ public partial class MainWindow : Window
         );
 
         _tree.SetRows(rows, _columns);
-        Record(_layoutTimes, watch.Elapsed.TotalMilliseconds);
+        _layoutTimes.Record(watch.Elapsed.TotalMilliseconds);
 
         SyncScrollBars();
         UpdateStatus();
@@ -787,7 +716,7 @@ public partial class MainWindow : Window
         var snapshot = _list.Current;
         var selected = _tree.SelectedProcess;
 
-        var prefix = _paused ? "PAUSED    —    " : "";
+        var prefix = _sweep.Paused ? "PAUSED    —    " : "";
 
         _statusText.Text = selected is null
             ? $"{prefix}{snapshot.Processes.Count} processes, {snapshot.System.ThreadCount} threads"
@@ -797,7 +726,7 @@ public partial class MainWindow : Window
 
         _timingText.Text = string.Create(
             CultureInfo.InvariantCulture,
-            $"sweep {Average(_sweepTimes), 6:F1} ms   layout {Average(_layoutTimes), 5:F2} ms   "
+            $"sweep {_sweep.AverageSweepMilliseconds, 6:F1} ms   layout {_layoutTimes.Average, 5:F2} ms   "
                 + $"paint {_tree.AverageRenderMilliseconds, 5:F2} ms   "
                 + $"{_tree.LastRenderedRowCount}/{snapshot.Processes.Count} rows drawn"
         );
@@ -827,7 +756,7 @@ public partial class MainWindow : Window
         if (ActionableSelection() is { } process)
         {
             await _actions.KillAsync(process, tree, _list.Current).ConfigureAwait(true);
-            await RefreshNowAsync().ConfigureAwait(true);
+            await _sweep.RefreshNowAsync().ConfigureAwait(true);
         }
     }
 
@@ -836,7 +765,7 @@ public partial class MainWindow : Window
         if (ActionableSelection() is { } process)
         {
             await _actions.SuspendAsync(process).ConfigureAwait(true);
-            await RefreshNowAsync().ConfigureAwait(true);
+            await _sweep.RefreshNowAsync().ConfigureAwait(true);
         }
     }
 
@@ -845,7 +774,7 @@ public partial class MainWindow : Window
         if (ActionableSelection() is { } process)
         {
             await _actions.ResumeAsync(process).ConfigureAwait(true);
-            await RefreshNowAsync().ConfigureAwait(true);
+            await _sweep.RefreshNowAsync().ConfigureAwait(true);
         }
     }
 
@@ -854,7 +783,7 @@ public partial class MainWindow : Window
         if (ActionableSelection() is { } process)
         {
             await _actions.RestartAsync(process, _list.Current).ConfigureAwait(true);
-            await RefreshNowAsync().ConfigureAwait(true);
+            await _sweep.RefreshNowAsync().ConfigureAwait(true);
         }
     }
 
@@ -863,7 +792,7 @@ public partial class MainWindow : Window
         if (ActionableSelection() is { } process)
         {
             await _actions.SetNiceAsync(process, nice).ConfigureAwait(true);
-            await RefreshNowAsync().ConfigureAwait(true);
+            await _sweep.RefreshNowAsync().ConfigureAwait(true);
         }
     }
 
@@ -1150,18 +1079,4 @@ public partial class MainWindow : Window
         _lowerPane.ColorRules = rules;
         _tree.InvalidateVisual();
     }
-
-    // ---- Helpers ------------------------------------------------------------
-
-    private static void Record(Queue<double> samples, double value)
-    {
-        samples.Enqueue(value);
-        while (samples.Count > 10)
-        {
-            samples.Dequeue();
-        }
-    }
-
-    private static double Average(Queue<double> samples) =>
-        samples.Count == 0 ? 0 : samples.Average();
 }

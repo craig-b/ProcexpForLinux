@@ -118,6 +118,11 @@ public sealed class LowerPaneView : UserControl
             table.SelectionChanged += (_, _) => UpdateSummary();
         }
 
+        // Double-click opens the row in full. Threads have no detail window:
+        // every field they have is already a column.
+        _modules.RowActivated += (_, _) => ShowDetail?.Invoke(_modules.SelectedItem, null);
+        _handles.RowActivated += (_, _) => ShowDetail?.Invoke(null, _handles.SelectedItem);
+
         ApplyMode();
     }
 
@@ -133,6 +138,13 @@ public sealed class LowerPaneView : UserControl
     }
 
     public IReadOnlyList<ProcessColorRule> ColorRules { get; set; } = ProcessColorRule.Defaults;
+
+    /// <summary>
+    /// Raised when a row is opened; exactly one argument is non-null. The
+    /// window owns the detail windows, since the pane has no parent to give
+    /// them and an ownerless window has no sensible placement.
+    /// </summary>
+    public event Action<ModuleInfo?, FileDescriptorInfo?>? ShowDetail;
 
     /// <summary>How long the new and removed row tints linger.</summary>
     public TimeSpan HighlightDuration

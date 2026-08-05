@@ -717,7 +717,7 @@ public sealed class ProcessPropertiesWindow : Window
 
         _provenanceDetail.Clear();
         _provenanceDetail.AddSection("Package");
-        _provenanceDetail.Add("Status", DescribeStatus(info.Status), showWhenEmpty: true);
+        _provenanceDetail.Add("Status", ProvenanceText.Describe(info.Status), showWhenEmpty: true);
         _provenanceDetail.Add("Package", info.PackageName);
         _provenanceDetail.Add("Version", info.PackageVersion);
         _provenanceDetail.Add("Repository", info.Repository);
@@ -743,19 +743,4 @@ public sealed class ProcessPropertiesWindow : Window
             _provenanceDetail.Add("Report", vt.Permalink);
         }
     }
-
-    private static string DescribeStatus(ProvenanceStatus status) =>
-        status switch
-        {
-            ProvenanceStatus.PackageVerified =>
-                "Shipped by the distribution, and unmodified on disk.",
-            ProvenanceStatus.PackageModified =>
-                "Owned by a package, but the file on disk no longer matches it.",
-            ProvenanceStatus.Unpackaged =>
-                "Not owned by any package — built locally, downloaded, or installed by hand.",
-            ProvenanceStatus.SandboxedBundle =>
-                "Shipped inside a Flatpak or Snap, which carries its own signing.",
-            ProvenanceStatus.Unknown => "Could not be determined.",
-            _ => status.ToString(),
-        };
 }

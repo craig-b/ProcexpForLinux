@@ -85,6 +85,14 @@ public partial class MainWindow : Window
         _tree.IsDarkMode = ActualThemeVariant == ThemeVariant.Dark;
 
         _lowerPane = new LowerPaneView(_sampler) { IsDarkMode = _tree.IsDarkMode };
+        _lowerPane.ShowDetail += (module, descriptor) =>
+        {
+            var window =
+                module is not null ? DetailWindow.ForModule(module)
+                : descriptor is not null ? DetailWindow.ForDescriptor(descriptor)
+                : null;
+            window?.Show(this);
+        };
         Get<ContentControl>("LowerPaneHost").Content = _lowerPane;
 
         ApplySettings();
